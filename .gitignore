@@ -1,5 +1,29 @@
+# Ignore Yeoman and Bower generated artifacts
 node_modules
 dist
 .tmp
 .sass-cache
-bower_components
+# Un-ignore dist directories in bower_components
+!bower_components/**/dist/
+
+# Ignore IntelliJ IDEA files
+*.iml
+.idea
+*.ipr
+*.iws
+
+# Ignore Eclipse IDE files
+.metadata
+.classpath
+.settings/
+.project
+
+# Ignore Maven build artifacts
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
