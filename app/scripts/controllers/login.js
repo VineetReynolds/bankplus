@@ -2,12 +2,12 @@
 
 /**
  * @ngdoc function
- * @name bankPlusApp.controller:MainCtrl
+ * @name bankPlusApp.controller:LoginCtrl
  * @description
- * # MainCtrl
+ * # LoginCtrl
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('MainCtrl', ["$scope", function ($scope) {
+  .controller('LoginCtrl', ["$scope", function ($scope) {
 
   }]);
