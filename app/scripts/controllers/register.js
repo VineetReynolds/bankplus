@@ -8,7 +8,7 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('RegisterCtrl', ['$scope', '$location', 'localStorageService', function ($scope, $location, localStorageService) {
+  .controller('RegisterCtrl', ['$scope', '$location', 'flash', 'localStorageService', function ($scope, $location, flash, localStorageService) {
     var usersInStore = localStorageService.get('users');
 
     $scope.users = usersInStore || [];
