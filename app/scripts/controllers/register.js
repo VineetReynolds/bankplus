@@ -18,7 +18,8 @@ angular.module('bankPlusApp')
     }, true);
 
     $scope.registerUser = function() {
-      $scope.users.push($scope.user);
+      var userToStore = {'email':$scope.user.email, 'password':$scope.user.password};
+      $scope.users.push(userToStore);
       flash.setMessage({"type":"success","text":"You have been registered successfully."});
       $location.path("/login");
     };
