@@ -40,6 +40,10 @@ angular
         templateUrl: 'views/dashboard.html',
         controller: 'DashboardCtrl'
       })
+      .when('/contacts/new', {
+        templateUrl: 'views/contacts/new.html',
+        controller: 'ContactsRegisterCtrl'
+      })
       .otherwise({
         redirectTo: '/'
       });
