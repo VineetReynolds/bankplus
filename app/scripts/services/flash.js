@@ -18,7 +18,6 @@ angular.module('bankPlusApp')
 
     return {
       getMessage: function () {
-        console.log(currentMessage);
         return currentMessage;
       },
       setMessage: function(message) {
