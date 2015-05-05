@@ -17,12 +17,12 @@ angular.module('bankPlusApp')
         var credentials = {'email':$scope.login.email, 'password':$scope.login.password};
         for(var ctr = 0; ctr < $scope.users.length; ctr++) {
           var user = $scope.users[ctr];
-          if(credentials.email == user.email && credentials.password == user.password) {
-            flash.setMessage({"type":"success","text":"You have logged in successfully."});
-            $location.path("/customers/dashboard");
+          if(credentials.email === user.email && credentials.password === user.password) {
+            flash.setMessage({'type':'success','text':'You have logged in successfully.'});
+            $location.path('/customers/dashboard');
             return;
           }
         }
-        flash.setMessage({"type":"error","text":"Email or password was incorrect."});
+        flash.setMessage({'type':'error','text':'Email or password was incorrect.'});
       };
   }]);

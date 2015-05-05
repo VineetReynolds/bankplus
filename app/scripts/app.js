@@ -44,6 +44,38 @@ angular
         templateUrl: 'views/contacts/new.html',
         controller: 'ContactsRegisterCtrl'
       })
+      .when('/contacts/view', {
+        templateUrl: 'views/contacts/view.html',
+        controller: 'ContactsViewCtrl'
+      })
+      .when('/transactions/deposits/new', {
+        templateUrl: 'views/transactions/deposits/new.html',
+        controller: 'TransactionsDepositsNewCtrl'
+      })
+      .when('/transactions/withdrawals/new', {
+        templateUrl: 'views/transactions/withdrawals/new.html',
+        controller: 'TransactionsWithdrawalsNewCtrl'
+      })
+      .when('/transactions/payments/new', {
+        templateUrl: 'views/transactions/payments/new.html',
+        controller: 'TransactionsPaymentsNewCtrl'
+      })
+      .when('/reports/monthly', {
+        templateUrl: 'views/reports/monthly.html',
+        controller: 'ReportsMonthlyCtrl'
+      })
+      .when('/reports/yearly', {
+        templateUrl: 'views/reports/yearly.html',
+        controller: 'ReportsYearlyCtrl'
+      })
+      .when('/reports/custom', {
+        templateUrl: 'views/reports/custom.html',
+        controller: 'ReportsCustomCtrl'
+      })
+      .when('/contacts/edit/:contactId', {
+        templateUrl: 'views/contacts/edit.html',
+        controller: 'ContactsEditCtrl'
+      })
       .otherwise({
         redirectTo: '/'
       });

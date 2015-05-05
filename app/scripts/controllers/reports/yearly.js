@@ -2,16 +2,16 @@
 
 /**
  * @ngdoc function
- * @name bankPlusApp.controller:MainCtrl
+ * @name bankPlusApp.controller:ReportsYearlyCtrl
  * @description
- * # MainCtrl
+ * # ReportsYearlyCtrl
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('MainCtrl', ['$scope', function ($scope) {
+  .controller('ReportsYearlyCtrl', function ($scope) {
     $scope.awesomeThings = [
       'HTML5 Boilerplate',
       'AngularJS',
       'Karma'
     ];
-  }]);
+  });
