@@ -8,10 +8,8 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('DashboardCtrl', ['$scope', function ($scope) {
-    $scope.awesomeThings = [
-      'HTML5 Boilerplate',
-      'AngularJS',
-      'Karma'
-    ];
+  .controller('DashboardCtrl', ['$scope', 'customerResource', function ($scope, customerResource) {
+    customerResource.query({'customerId':auth.customer.id}, function(response){
+      $scope.account = response.account;
+    });
   }]);

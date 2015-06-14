@@ -28,7 +28,7 @@
       </thead>
       <tbody id="search-results-body">
       <tr ng-repeat="result in searchResults | filter:search.name">
-        <td>{{result.name}}</td>
+        <td>{{result.fullName}}</td>
         <td>{{result.iban}}</td>
         <td><a href="#/contacts/edit/{{result.id}}" class="glyphicon glyphicon-edit">Edit</a></td>
       </tr>

@@ -1,34 +1,34 @@
-<form name="registerUserForm" class="form-horizontal" novalidate>
+<form name="registerCustomerForm" class="form-horizontal" novalidate>
   <div class="form-group"
-       ng-class="{'has-error': registerUserForm.inputEmail.$invalid && !registerUserForm.inputEmail.$pristine}">
-    <label for="inputEmail" class="col-sm-2 control-label">Email</label>
+       ng-class="{'has-error': registerCustomerForm.mailingAddress.$invalid && !registerUserForm.mailingAddress.$pristine}">
+    <label for="mailingAddress" class="col-sm-2 control-label">Mailing Address</label>
 
     <div class="col-sm-10">
-      <input type="email" class="form-control" id="inputEmail" name="inputEmail" placeholder="Email"
-             ng-model="user.email" required>
+      <input type="text" class="form-control" id="mailingAddress" name="mailingAddress" placeholder="Mailing Address"
+             ng-model="user.mailingAddress" required>
     </div>
   </div>
   <div class="form-group"
-       ng-class="{'has-error': registerUserForm.inputPassword.$invalid && !registerUserForm.inputPassword.$pristine}">
-    <label for="inputPassword" class="col-sm-2 control-label">Password</label>
+       ng-class="{'has-error': registerUserForm.phoneNumber.$invalid && !registerUserForm.phoneNumber.$pristine}">
+    <label for="phoneNumber" class="col-sm-2 control-label">Phone Number</label>
 
     <div class="col-sm-10">
-      <input type="password" class="form-control" id="inputPassword" name="inputPassword" placeholder="Password"
-             ng-model="user.password" required/>
+      <input type="tel" class="form-control" id="phoneNumber" name="phoneNumber" placeholder="Phone Number"
+             ng-model="user.phoneNumber" required/>
     </div>
   </div>
   <div class="form-group"
-       ng-class="{'has-error': registerUserForm.inputConfirmPassword.$invalid && !registerUserForm.inputConfirmPassword.$pristine && !registerUserForm.inputConfirmPassword.$match}">
-    <label for="inputConfirmPassword" class="col-sm-2 control-label">Confirm Password</label>
+       ng-class="{'has-error': registerUserForm.mobileNumber.$invalid && !registerUserForm.mobileNumber.$pristine}">
+    <label for="mobileNumber" class="col-sm-2 control-label">Mobile Number (for notifications)</label>
 
     <div class="col-sm-10">
-      <input type="password" class="form-control" id="inputConfirmPassword" name="inputConfirmPassword"
-             placeholder="Confirm Password" ng-model="user.password2" required match="user.password">
+      <input type="tel" class="form-control" id="mobileNumber" name="mobileNumber"
+             placeholder="Mobile Number" ng-model="user.mobileNumber" required />
     </div>
   </div>
   <div class="form-group">
     <div class="col-sm-offset-2 col-sm-10">
-      <input type="button" class="btn btn-default" ng-click="registerUser()" ng-disabled="registerUserForm.$invalid"
+      <input type="button" class="btn btn-default" ng-click="registerCustomer()" ng-disabled="registerCustomerForm.$invalid"
              value="Register"/>
     </div>
   </div>

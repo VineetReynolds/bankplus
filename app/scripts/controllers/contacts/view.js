@@ -8,10 +8,8 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('ContactsViewCtrl', ['$scope','localStorageService', function ($scope, localStorageService) {
-    var contactsStore = localStorageService.get('contacts');
-
-    $scope.contacts = contactsStore || [];
+  .controller('ContactsViewCtrl', ['$scope','contactResource', function ($scope, contactResource) {
+    $scope.contacts = contactResource.queryAll({'customerId':auth.customer.id});
 
     $scope.performSearch = function() {
       $scope.searchResults = $scope.contacts;

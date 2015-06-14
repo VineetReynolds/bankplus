@@ -8,20 +8,24 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('RegisterCtrl', ['$scope', '$location', 'flash', 'localStorageService', function ($scope, $location, flash, localStorageService) {
-    var usersInStore = localStorageService.get('users');
-
-    $scope.users = usersInStore || [];
-
-    $scope.$watch('users', function(){
-      localStorageService.set('users', $scope.users);
-    }, true);
-
-    $scope.registerUser = function() {
-      var userToStore = {'email':$scope.user.email, 'password':$scope.user.password};
-      $scope.users.push(userToStore);
-      flash.setMessage({'type':'success','text':'You have been registered successfully.'});
-      $location.path('/login');
+  .controller('RegisterCtrl', ['$scope', '$location', 'flash', 'customerResource', function ($scope, $location, flash, customerResource) {
+    $scope.registerCustomer = function() {
+      var userToStore = {
+        'fullName': auth.authz.idTokenParsed.name,
+        'mailingAddress': $scope.user.mailingAddress,
+        'emailAddress': auth.authz.idTokenParsed.email,
+        'phoneNumber':  $scope.user.phoneNumber,
+        'mobileNumber': $scope.user.mobileNumber};
+      var successCallback = function(data,responseHeaders){
+        auth.shouldRegisterUser = false;
+        auth.customer = data;
+        flash.setMessage({'type':'success','text':'You have been registered successfully.'});
+        $location.path('/');
+      };
+      var errorCallback = function() {
+        $scope.displayError = true;
+      };
+      customerResource.save(userToStore, successCallback, errorCallback);
     };
 
     $scope.clearUser = function() {

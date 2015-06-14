@@ -30,8 +30,11 @@ angular
   .config(['$routeProvider', function ($routeProvider) {
     $routeProvider
       .when('/', {
-        templateUrl: 'views/main.html',
-        controller: 'MainCtrl'
+        templateUrl: 'views/dashboard.html',
+        controller: 'DashboardCtrl',
+        resolve: {
+          factory: checkRouting
+        }
       })
       .when('/about', {
         templateUrl: 'views/about.html',
@@ -41,7 +44,7 @@ angular
         templateUrl: 'views/login.html',
         controller: 'LoginCtrl'
       })
-      .when('/register', {
+      .when('/accountPreferences', {
         templateUrl: 'views/register.html',
         controller: 'RegisterCtrl'
       })
@@ -139,6 +142,15 @@ angular
     $httpProvider.interceptors.push('authInterceptor');
   });
 
+var checkRouting= function ($q, $rootScope, $location) {
+  if (auth.shouldRegisterUser) {
+    $location.path("/accountPreferences");
+  } else {
+    return true;
+  }
+};
+
+
 angular.element(document).ready(function ($http) {
   var keycloakAuth = new Keycloak('keycloak.json');
   auth.loggedIn = false;
@@ -147,7 +159,53 @@ angular.element(document).ready(function ($http) {
     auth.loggedIn = true;
     auth.authz = keycloakAuth;
     auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/bankplus/tokens/logout?redirect_uri=http://localhost:9000/";
-    angular.bootstrap(document, ['bankPlusApp']);
+
+    var initInjector = angular.injector(["ng"]);
+    var $http = initInjector.get("$http");
+    var $q = initInjector.get("$q");
+
+    updateToken().then(fetchCustomer().finally(bootstrapApplication));
+
+    function updateToken() {
+      return $q(function(resolve, reject){
+        keycloakAuth.updateToken(10)
+          .success(function() {
+            resolve();
+          })
+          .error(function() {
+            reject('Failed to update the token');
+          });
+      });
+    }
+
+    function fetchCustomer() {
+      var req = {
+        method: 'GET',
+        url: "./bankplus/rest/customers?email=" + auth.authz.idTokenParsed.email,
+        headers: {
+          'Authorization': 'Bearer ' + auth.authz.token,
+          'Accept': 'application/json'
+        }
+      };
+
+      return $q(function(resolve, reject){
+        $http(req).then(function(response) {
+          if (response.data.length == 0) {
+            auth.shouldRegisterUser = true;
+          } else {
+            auth.customer = response.data[0];
+          }
+          resolve();
+        }, function(errorResponse) {
+          console.log("Error verifying customer data record..");
+          reject();
+        });
+      });
+    }
+
+    function bootstrapApplication() {
+      angular.bootstrap(document, ['bankPlusApp']);
+    }
   }).error(function () {
     window.location.reload();
   });

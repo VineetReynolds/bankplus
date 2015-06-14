@@ -8,22 +8,19 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('TransactionsPaymentsNewCtrl', ['$scope', '$location', 'flash', 'localStorageService', function ($scope, $location, flash, localStorageService) {
-    var transactionsInStore = localStorageService.get('transactions');
-    var contactsInStore = localStorageService.get('contacts');
-
-    $scope.transactions = transactionsInStore || [];
-    $scope.contactsInStore = contactsInStore || [];
-
-    $scope.$watch('transactions', function(){
-      localStorageService.set('transactions', $scope.transactions);
-    }, true);
+  .controller('TransactionsPaymentsNewCtrl', ['$scope', '$location', 'flash', 'contactResource', 'paymentResource', function ($scope, $location, flash, contactResource, paymentResource) {
+    $scope.contactsInStore = contactResource.queryAll({'customerId':auth.customer.id});
 
     $scope.makePayment = function() {
-      var transactionToStore = {'type':'PAYMENT', 'payee':$scope.payment.contact, 'amount':$scope.payment.amount};
-      $scope.transactions.push(transactionToStore);
-      flash.setMessage({'type':'success','text':'Your account has been debited.'});
-      $location.path('/customers/dashboard');
+      var transactionToStore = {'payeeId':$scope.payment.contact, 'amount':$scope.payment.amount};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'Your account has been debited.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function() {
+        $scope.displayError = true;
+      };
+      paymentResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);
     };
 
     $scope.clear = function() {

@@ -6,7 +6,7 @@
     <div class="form-group">
       <label class="col-md-4 control-label" for="contact">Pay to :</label>
       <div class="col-md-4">
-        <select id="contact" name="contact" class="form-control input-md" ng-model="payment.contact" ng-options="contact.id as contact.name for contact in contactsInStore" required>
+        <select id="contact" name="contact" class="form-control input-md" ng-model="payment.contact" ng-options="contact.id as contact.fullName for contact in contactsInStore" required>
           <option value="">[No contact]</option>
         </select>
         <span class="help-block">Contact to pay</span>

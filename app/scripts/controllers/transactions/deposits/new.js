@@ -8,20 +8,18 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('TransactionsDepositsNewCtrl', ['$scope', '$location', 'flash', 'localStorageService', function ($scope, $location, flash, localStorageService) {
-    var transactionsInStore = localStorageService.get('transactions');
-
-    $scope.transactions = transactionsInStore || [];
-
-    $scope.$watch('transactions', function(){
-      localStorageService.set('transactions', $scope.transactions);
-    }, true);
+  .controller('TransactionsDepositsNewCtrl', ['$scope', '$location', 'flash', 'depositResource', function ($scope, $location, flash, depositResource) {
 
     $scope.makeDeposit = function() {
-      var transactionToStore = {'type':'DEPOSIT', 'amount':$scope.deposit.amount};
-      $scope.transactions.push(transactionToStore);
-      flash.setMessage({'type':'success','text':'Your account has been credited.'});
-      $location.path('/customers/dashboard');
+      var transactionToStore = {'amount':$scope.deposit.amount};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'Your account has been credited.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function() {
+        $scope.displayError = true;
+      };
+      depositResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);
     };
 
     $scope.clear = function() {

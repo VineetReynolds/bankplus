@@ -71,11 +71,19 @@ module.exports = function (grunt) {
         hostname: 'localhost',
         livereload: 35729
       },
+      proxies: [{
+        context: '/bankplus/rest', // the context of the backend data service
+        host: 'localhost', // wherever the data service is running
+        port: 9080 // the port that the data service is running on
+      }],
       livereload: {
         options: {
           open: true,
           middleware: function (connect) {
-            return [
+            // Setup the proxy
+            var middlewares = [require('grunt-connect-proxy/lib/utils').proxyRequest];
+
+            var staticFiles = [
               connect.static('.tmp'),
               connect().use(
                 '/bower_components',
@@ -87,6 +95,8 @@ module.exports = function (grunt) {
               ),
               connect.static(appConfig.app)
             ];
+            Array.prototype.push.apply(middlewares, staticFiles);
+            return middlewares;
           }
         }
       },
@@ -400,6 +410,7 @@ module.exports = function (grunt) {
       'wiredep',
       'concurrent:server',
       'autoprefixer:server',
+      'configureProxies:server',
       'connect:livereload',
       'watch'
     ]);

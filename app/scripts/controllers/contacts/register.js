@@ -8,23 +8,19 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('ContactsRegisterCtrl', ['$scope', '$location', 'flash', 'localStorageService', function ($scope, $location, flash, localStorageService) {
-    var contactsStore = localStorageService.get('contacts');
-    var currentId = parseInt(localStorageService.get('contactsCounter')) || 0;
-
-    $scope.contacts = contactsStore || [];
-
-    $scope.$watch('contacts', function(){
-      localStorageService.set('contacts', $scope.contacts);
-    }, true);
+  .controller('ContactsRegisterCtrl', ['$scope', '$location', 'flash', 'contactResource', function ($scope, $location, flash, contactResource) {
 
     $scope.registerContact = function() {
-      currentId++;
-      var contactToStore = {'id':currentId, 'name':$scope.contact.name, 'iban':$scope.contact.iban};
-      localStorageService.set('contactsCounter', currentId);
-      $scope.contacts.push(contactToStore);
-      flash.setMessage({'type':'success','text':'The contact was added successfully.'});
-      $location.path('/customers/dashboard');
+      var contactToStore = {'fullName':$scope.contact.name, 'iban':$scope.contact.iban};
+      var successCallback = function(data,responseHeaders){
+        auth.shouldRegisterUser = false;
+        flash.setMessage({'type':'success','text':'The contact was added successfully.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function() {
+        $scope.displayError = true;
+      };
+      contactResource.save({'customerId':auth.customer.id}, contactToStore, successCallback, errorCallback);
     };
 
     $scope.clearUser = function() {

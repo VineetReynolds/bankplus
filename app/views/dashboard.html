@@ -2,14 +2,14 @@
     <div class="row clearfix">
         <div class="col-md-12 column">
             <h3>
-                Balance: $ XX.YY
+                Balance: $ {{account.balance}}
             </h3>
             <ul class="list-unstyled">
                 <li>
-                    &lt;Account number&gt;
+                    {{account.iban}}
                 </li>
                 <li>
-                    &lt;Date&gt;
+                  as of {{account.lastUpdatedOn | date:'medium'}}
                 </li>
             </ul>
         </div>
