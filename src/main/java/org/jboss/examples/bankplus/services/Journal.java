@@ -7,7 +7,7 @@ import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.math.BigDecimal;
-import java.util.Set;
+import java.util.*;
 
 @Stateless
 public class Journal {
@@ -36,6 +36,7 @@ public class Journal {
         }
 
         entry.setPostingStatus(PostingStatus.POSTED);
+        account.setLastUpdatedOn(new Date());
         em.merge(entry);
         em.merge(account);
 
@@ -77,6 +78,7 @@ public class Journal {
             balance = balance.add(childAccount.getBalance());
         }
         parentAccount.setBalance(balance);
+        parentAccount.setLastUpdatedOn(new Date());
 
         em.merge(parentAccount);
 
