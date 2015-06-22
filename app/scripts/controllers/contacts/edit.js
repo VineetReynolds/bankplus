@@ -14,7 +14,7 @@ angular.module('bankPlusApp')
     });
 
     $scope.modifyContact = function() {
-      $scope.contact.update(function () {
+      $scope.contact.$update({'customerId':auth.customer.id}, function () {
         flash.setMessage({'type':'success','text':'The contact was modified successfully.'});
         $location.path('/customers/dashboard');
       });
