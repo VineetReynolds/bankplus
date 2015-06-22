@@ -158,7 +158,7 @@ angular.element(document).ready(function ($http) {
   keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
     auth.loggedIn = true;
     auth.authz = keycloakAuth;
-    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/bankplus/tokens/logout?redirect_uri=http://localhost:9000/";
+    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/Bankplus/tokens/logout?redirect_uri=http://localhost:9000/";
 
     var initInjector = angular.injector(["ng"]);
     var $http = initInjector.get("$http");
