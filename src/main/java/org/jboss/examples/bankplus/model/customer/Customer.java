@@ -1,11 +1,10 @@
 package org.jboss.examples.bankplus.model.customer;
 
 import javax.persistence.*;
-import java.io.Serializable;
-import java.lang.Override;
-import java.util.Set;
-import java.util.HashSet;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @XmlRootElement

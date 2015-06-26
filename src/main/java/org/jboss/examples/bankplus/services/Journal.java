@@ -6,7 +6,7 @@ import org.jboss.examples.bankplus.model.money.Money;
 import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
-import java.math.BigDecimal;
+import javax.persistence.TypedQuery;
 import java.util.*;
 
 @Stateless
@@ -15,49 +15,13 @@ public class Journal {
     @PersistenceContext
     private EntityManager em;
 
-    public void postEntry(JournalEntry entry) {
-        Money amount = entry.getAmount();
-        EntryType entryType = entry.getType();
-        Account account = entry.getAccount();
-        AccountType accountType = account.getAccountType();
-        Money balance = account.getBalance();
-        if (accountType == AccountType.ASSET || accountType == AccountType.EXPENSE) {
-            if (entryType == EntryType.DEBIT) {
-                account.setBalance(balance.add(amount));
-            } else {
-                account.setBalance(balance.subtract(amount));
-            }
-        } else {
-            if (entryType == EntryType.DEBIT) {
-                account.setBalance(balance.subtract(amount));
-            } else {
-                account.setBalance(balance.add(amount));
-            }
-        }
-
-        entry.setPostingStatus(PostingStatus.POSTED);
-        account.setLastUpdatedOn(new Date());
-        em.merge(entry);
-        em.merge(account);
-
-        recomputeBalanceOfParent(account);
-    }
-
-    public void recomputeBalanceOfParent(Account account) {
-        Account parentAccount = account.getParentAccount();
-        if (parentAccount != null) {
-            return;
-        }
-        // Compute the balance based on the journal entries for this account.
-        Money balance = new Money(account.getBalance().getCurrency(), BigDecimal.ZERO);
-        for (JournalEntry journalEntry : parentAccount.getJournalEntries()) {
-            // ignore unposted entries for balance computation
-            if (journalEntry.getPostingStatus() == PostingStatus.UNPOSTED) {
-                continue;
-            }
+    public void computeAccountBalance(Account account) {
+        // Compute the balance based on the opening balance and the journal entries posted for this account.
+        Money balance = account.getOpeningBalance();
+        for (JournalEntry journalEntry : getPostedEntriesForAccountSince(account, account.getPeriodOpenDate())) {
             Money amount = journalEntry.getAmount();
             EntryType entryType = journalEntry.getType();
-            AccountType accountType = parentAccount.getAccountType();
+            AccountType accountType = account.getAccountType();
             if (accountType == AccountType.ASSET || accountType == AccountType.EXPENSE) {
                 if (entryType == EntryType.DEBIT) {
                     balance = balance.add(amount);
@@ -74,25 +38,45 @@ public class Journal {
         }
 
         // Assuming child account balances are up to date, recompute the parent's balance
-        for (Account childAccount : parentAccount.getChildAccounts()) {
-            balance = balance.add(childAccount.getBalance());
+        for (Account childAccount : account.getChildAccounts()) {
+            balance = balance.add(childAccount.getCurrentBalance());
         }
-        parentAccount.setBalance(balance);
-        parentAccount.setLastUpdatedOn(new Date());
+        account.setCurrentBalance(balance);
+        account.setLastUpdatedOn(new Date());
 
-        em.merge(parentAccount);
+        em.merge(account);
 
         // Recursively update until we hit the Ledger Head accounts (Assets, Liabilities, etc.)
-        if (parentAccount.getParentAccount() != null) {
-            recomputeBalanceOfParent(parentAccount);
+        Account parentAccount = account.getParentAccount();
+        if (parentAccount != null) {
+            computeAccountBalance(parentAccount);
         }
     }
 
     public void postToLedger(Set<JournalEntry> entries) {
         for(JournalEntry entry: entries) {
             if(entry.getPostingStatus() == PostingStatus.UNPOSTED) {
-                postEntry(entry);
+                entry.setPostingStatus(PostingStatus.POSTED);
+                em.persist(entry);
+                computeAccountBalance(entry.getAccount());
             }
         }
+    }
+
+    private Collection<JournalEntry> getPostedEntriesForAccountSince(Account account, Date dateTime) {
+        String query = "SELECT j FROM JournalEntry j WHERE j.account = :account " +
+                "AND j.postingStatus = org.jboss.examples.bankplus.model.accounting.PostingStatus.POSTED";
+        TypedQuery<JournalEntry> journalEntryQuery = null;
+        if(dateTime == null) {
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+        } else {
+            query += " AND j.dateTime >= :dateTime";
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+            journalEntryQuery.setParameter("dateTime", dateTime);
+        }
+        List<JournalEntry> entries = journalEntryQuery.getResultList();
+        return entries;
     }
 }

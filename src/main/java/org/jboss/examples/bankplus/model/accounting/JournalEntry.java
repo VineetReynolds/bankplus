@@ -1,8 +1,10 @@
 package org.jboss.examples.bankplus.model.accounting;
 
 import org.jboss.examples.bankplus.model.money.Money;
+import org.jboss.examples.bankplus.model.transactions.Event;
 
 import javax.persistence.*;
+import java.util.Date;
 
 @Entity
 public class JournalEntry {
@@ -61,5 +63,27 @@ public class JournalEntry {
 
     public void setPostingStatus(PostingStatus postingStatus) {
         this.postingStatus = postingStatus;
+    }
+
+    @Temporal(TemporalType.TIMESTAMP)
+    public Date dateTime;
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    @ManyToOne
+    private Event financialEvent;
+
+    public Event getFinancialEvent() {
+        return financialEvent;
+    }
+
+    public void setFinancialEvent(Event financialEvent) {
+        this.financialEvent = financialEvent;
     }
 }

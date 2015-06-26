@@ -31,7 +31,8 @@ public class Accounts {
         }
         account.setAccountType(accountType);
         Currency USD = currencies.findByCode("USD");
-        account.setBalance(new Money(USD, BigDecimal.ZERO));
+        account.setOpeningBalance(new Money(USD, BigDecimal.ZERO));
+        account.setCurrentBalance(new Money(USD, BigDecimal.ZERO));
         account.setParentAccount(parentAccount);
         em.persist(account);
         return account;

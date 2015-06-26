@@ -41,6 +41,9 @@ public class CustomerResource {
     private PaymentsResource paymentsResource;
 
     @Inject
+    private ReportsResource reportsResource;
+
+    @Inject
     private CustomerService customerService;
 
     @Context
@@ -158,6 +161,15 @@ public class CustomerResource {
             throw new WebApplicationException(Status.NOT_FOUND);
         }
         return paymentsResource;
+    }
+
+    @Path("/{id:[0-9][0-9]*}/reports")
+    public ReportsResource getReportResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return reportsResource;
     }
 
 }

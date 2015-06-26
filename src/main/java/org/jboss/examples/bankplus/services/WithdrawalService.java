@@ -60,17 +60,22 @@ public class WithdrawalService {
         creditEntry.setAccount(cashAccount);
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(withdrawal.getWithdrawalAmount());
+        creditEntry.setDateTime(withdrawal.getDateTime());
+        creditEntry.setFinancialEvent(withdrawal);
         creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(withdrawalAccount);
         debitEntry.setAmount(withdrawal.getWithdrawalAmount());
+        debitEntry.setDateTime(withdrawal.getDateTime());
+        debitEntry.setFinancialEvent(withdrawal);
         debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(debitEntry);
         journalEntries.add(creditEntry);
 
-        String description= "Withdrawal: (" + withdrawal.getWithdrawalAmount() + ") from [" + withdrawal.getWithdrawer().getFullName() + "]";
+        String description = "Withdrawal: " + withdrawal.getWithdrawalAmount().getCurrency().getCurrencyCode() + " " +  withdrawal.getWithdrawalAmount().getAmount()
+                + " to account by " + withdrawal.getWithdrawer().getFullName();
 
         withdrawal.setDescription(description);
         withdrawal.setJournalEntries(journalEntries);

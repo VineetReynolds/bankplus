@@ -9,6 +9,7 @@ import org.jboss.examples.bankplus.model.customer.Customer;
 import org.jboss.examples.bankplus.model.messages.OutgoingPaymentMessage;
 import org.jboss.examples.bankplus.model.money.Currency;
 import org.jboss.examples.bankplus.model.money.Money;
+import org.jboss.examples.bankplus.model.transactions.Charge;
 import org.jboss.examples.bankplus.model.transactions.Payment;
 
 import javax.ejb.Stateless;
@@ -42,16 +43,29 @@ public class PaymentService {
         if (amount.compareTo(BigDecimal.ZERO) == -1) {
             throw new DepositException("Negative amount specified for withdrawal");
         }
+        Currency USD = currencies.findByCode("USD");
+        Money chargeAmount = new Money(USD, amount.multiply(new BigDecimal("0.005")));
+        Money totalTransactionAmount = new Money(USD, amount).add(chargeAmount);
+        if(from.getCustomerAccount().getCurrentBalance().compareTo(totalTransactionAmount) == -1) {
+            throw new PaymentException("Insufficient balance in the account");
+        }
+
         Payment payment = new Payment();
         payment.setPayer(from);
         payment.setPayee(to);
         payment.setDateTime(new Date());
-        Currency USD = currencies.findByCode("USD");
         payment.setPaymentAmount(new Money(USD, amount));
+        Charge chargesForPayment = new Charge();
+        chargesForPayment.setCollectedFrom(from.getCustomerAccount());
+        chargesForPayment.setDateTime(new Date());
+        chargesForPayment.setChargeAmount(chargeAmount);
         postJournalEntries(payment);
+        postJournalEntries(chargesForPayment, payment);
         em.persist(payment);
+        em.persist(chargesForPayment);
         // Can be moved off into a batch
         journal.postToLedger(payment.getJournalEntries());
+        journal.postToLedger(chargesForPayment.getJournalEntries());
         return payment;
     }
 
@@ -68,35 +82,58 @@ public class PaymentService {
             }
         }
         Currency USD = currencies.findByCode("USD");
-        Money charges = new Money(USD, amount.getAmount().multiply(new BigDecimal("0.005")));
-        Money totalTransactionAmount = amount.add(charges);
-        if(payment.getPayer().getCustomerAccount().getBalance().getAmount().compareTo(totalTransactionAmount.getAmount()) == -1) {
-            throw new PaymentException("Insufficient balance in the account");
-        }
+
         final JournalEntry creditEntry = new JournalEntry();
         creditEntry.setAccount(payeeAccount);
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(amount);
+        creditEntry.setDateTime(payment.getDateTime());
+        creditEntry.setFinancialEvent(payment);
         creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(payment.getPayer().getCustomerAccount());
-        debitEntry.setAmount(totalTransactionAmount);
+        debitEntry.setAmount(amount);
+        debitEntry.setDateTime(payment.getDateTime());
+        debitEntry.setFinancialEvent(payment);
         debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(debitEntry);
+        journalEntries.add(creditEntry);
+
+        String description = "Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName();
+
+        payment.setDescription(description);
+        payment.setJournalEntries(journalEntries);
+    }
+
+    private void postJournalEntries(Charge chargesForPayment, Payment payment) {
+        Currency USD = currencies.findByCode("USD");
+        Money charges = chargesForPayment.getChargeAmount();
         final JournalEntry chargesEntry = new JournalEntry();
         chargesEntry.setType(EntryType.CREDIT);
         chargesEntry.setAccount(accounts.getChargesAccount());
         chargesEntry.setAmount(charges);
+        chargesEntry.setDateTime(chargesForPayment.getDateTime());
+        chargesEntry.setFinancialEvent(chargesForPayment);
         chargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry deductChargesEntry = new JournalEntry();
+        deductChargesEntry.setType(EntryType.DEBIT);
+        deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
+        deductChargesEntry.setAmount(charges);
+        deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
+        deductChargesEntry.setFinancialEvent(chargesForPayment);
+        deductChargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final Set<JournalEntry> journalEntries = new HashSet<>();
-        journalEntries.add(debitEntry);
-        journalEntries.add(creditEntry);
         journalEntries.add(chargesEntry);
+        journalEntries.add(deductChargesEntry);
 
-        String description = "Payment: [" + payment.getPayer().getFullName() + "] -> [" + payment.getPayee().getFullName() + "] (" + payment.getPaymentAmount() + ")";
+        String description = "Service charge for Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName();
 
-        payment.setDescription(description);
-        payment.setJournalEntries(journalEntries);
+        chargesForPayment.setDescription(description);
+        chargesForPayment.setJournalEntries(journalEntries);
     }
 
     public void generatePaymentMessage(Payment payment) {

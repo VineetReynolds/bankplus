@@ -44,7 +44,7 @@ public class Event {
         this.dateTime = dateTime;
     }
 
-    @OneToMany(cascade = CascadeType.ALL)
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "financialEvent")
     private Set<JournalEntry> journalEntries = new HashSet<>();
 
     public Set<JournalEntry> getJournalEntries() {

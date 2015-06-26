@@ -3,7 +3,6 @@ package org.jboss.examples.bankplus.model.accounting;
 import org.jboss.examples.bankplus.model.money.Money;
 
 import javax.persistence.*;
-import java.math.BigDecimal;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
@@ -69,14 +68,44 @@ public class Account {
     }
 
     @Embedded
-    private Money balance;
+    @AttributeOverrides(
+            @AttributeOverride(name="amount",column=@Column(name="currentBalanceAmount")))
+    @AssociationOverrides(
+            @AssociationOverride(name="currency",joinColumns = @JoinColumn(name="currentBalanceCurrency")))
+    private Money currentBalance;
 
-    public Money getBalance() {
-        return balance;
+    public Money getCurrentBalance() {
+        return currentBalance;
     }
 
-    public void setBalance(final Money balance) {
-        this.balance = balance;
+    public void setCurrentBalance(final Money balance) {
+        this.currentBalance = balance;
+    }
+
+    @Embedded
+    @AttributeOverrides(
+            @AttributeOverride(name="amount",column=@Column(name="openingBalanceAmount")))
+    @AssociationOverrides(
+            @AssociationOverride(name="currency",joinColumns = @JoinColumn(name="openingBalanceCurrency")))
+    private Money openingBalance;
+
+    public Money getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(Money openingBalance) {
+        this.openingBalance = openingBalance;
+    }
+
+    @Temporal(TemporalType.DATE)
+    private Date periodOpenDate;
+
+    public Date getPeriodOpenDate() {
+        return periodOpenDate;
+    }
+
+    public void setPeriodOpenDate(Date periodOpenDate) {
+        this.periodOpenDate = periodOpenDate;
     }
 
     @ManyToOne

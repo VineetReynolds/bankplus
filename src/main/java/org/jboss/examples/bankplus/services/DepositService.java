@@ -59,16 +59,21 @@ public class DepositService {
         creditEntry.setAccount(depositorAccount);
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(deposit.getDepositAmount());
+        creditEntry.setDateTime(deposit.getDateTime());
+        creditEntry.setFinancialEvent(deposit);
         creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(cashAccount);
         debitEntry.setAmount(deposit.getDepositAmount());
+        debitEntry.setDateTime(deposit.getDateTime());
+        debitEntry.setFinancialEvent(deposit);
         debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(debitEntry);
         journalEntries.add(creditEntry);
-        String description = "Deposit: (" + deposit.getDepositAmount() + ") to [" + deposit.getDepositor().getFullName() + "]";
+        String description = "Deposit: " + deposit.getDepositAmount().getCurrency().getCurrencyCode() + " " + deposit.getDepositAmount().getAmount()
+                + " to account by " + deposit.getDepositor().getFullName();
 
         deposit.setDescription(description);
         deposit.setJournalEntries(journalEntries);

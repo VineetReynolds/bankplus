@@ -24,7 +24,7 @@ public class CustomerAccountDTO implements Serializable {
         if (entity != null) {
             this.accountId = entity.getId();
             this.iban = entity.getIban();
-            this.balance = entity.getBalance().getAmount();
+            this.balance = entity.getCurrentBalance().getAmount();
             this.lastUpdatedOn = entity.getLastUpdatedOn();
         }
     }

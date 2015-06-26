@@ -93,4 +93,14 @@ public class Money {
     public Currency getCurrency() {
         return currency;
     }
+
+    public int compareTo(Money val) {
+        if(this == val) {
+            return 0;
+        }
+        if(!this.currency.equals(val.getCurrency())) {
+            throw new IllegalArgumentException("Currency does not match.");
+        }
+        return this.amount.compareTo(val.getAmount());
+    }
 }

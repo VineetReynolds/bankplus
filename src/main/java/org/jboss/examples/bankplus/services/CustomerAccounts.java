@@ -44,7 +44,9 @@ public class CustomerAccounts {
         customerAccount.setAccountId(accountId);
         customerAccount.setName(name);
         Currency USD = currencies.findByCode("USD");
-        customerAccount.setBalance(new Money(USD, BigDecimal.ZERO));
+        Money openingBalance = new Money(USD, BigDecimal.ZERO);
+        customerAccount.setOpeningBalance(openingBalance);
+        customerAccount.setCurrentBalance(openingBalance);
         customerAccount.setIban(iban);
         customerAccount.setLastUpdatedOn(new Date());
         Account liabilitiesAccount = accounts.getLiabilitiesAccount();
