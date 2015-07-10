@@ -20,8 +20,11 @@ angular.module('bankPlusApp')
       getMessage: function () {
         return currentMessage;
       },
-      setMessage: function(message) {
+      setMessage: function(message, pop) {
         messages.push(message);
+        if(pop) {
+          currentMessage = messages.shift() || {};
+        }
       }
     };
   }]);

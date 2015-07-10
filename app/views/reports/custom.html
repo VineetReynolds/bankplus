@@ -1,5 +1,37 @@
 <div>
-  <h3>Monthly statement</h3>
+  <h3>Custom statement</h3>
+  <form class="form-horizontal">
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="fromDate">From</label>
+      <div class="col-md-4">
+        <div class="input-group">
+          <input id="fromDate" name="fromDate" type="text" class="form-control" datepicker-popup="dd-MMMM-yyyy" is-open="fromOpened" datepicker-options="dateOptions" ng-model="fromDate" close-text="Close">
+          <span class="input-group-btn">
+            <button type="button" class="btn btn-default" ng-click="open($event, 'from')"><i class="glyphicon glyphicon-calendar"></i></button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="toDate">To</label>
+      <div class="col-md-4">
+        <div class="input-group">
+          <input id="toDate" name="toDate" type="text" class="form-control" datepicker-popup="dd-MMMM-yyyy" is-open="toOpened" datepicker-options="dateOptions" ng-model="toDate" close-text="Close">
+          <span class="input-group-btn">
+            <button type="button" class="btn btn-default" ng-click="open($event, 'to')"><i class="glyphicon glyphicon-calendar"></i></button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="generateReport"></label>
+      <div class="col-md-8">
+        <button id="generateReport" name="generateReport" class="btn btn-success" ng-click="generateReport()">Generate Report</button>
+      </div>
+    </div>
+  </form>
   <div class="table-responsive">
     <table class="table table-responsive table-bordered table-striped clearfix">
       <thead>
@@ -12,7 +44,7 @@
       </tr>
       </thead>
       <tbody id="results-body">
-      <tr ng-repeat="result in statementLines" ng-switch on="result.type">
+      <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
         <td>{{result.dateTime | date : 'medium'}}</td>
         <td>{{result.description}}</td>
         <td ng-switch-when="Withdrawal">{{result.amount}}</td>
@@ -26,4 +58,5 @@
       </tbody>
     </table>
   </div>
+  <dir-pagination-controls boundary-links="true"></dir-pagination-controls>
 </div>

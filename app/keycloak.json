@@ -1,6 +1,6 @@
 {
   "realm": "Bankplus",
-  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1H/FwTX1VuPluRrDW3NlTB1rEEdVHqRUjLGmewEd4sphqoVjk96PB4hNnWfqLGG6LKoaUEII0RM6XWCz9H031b/G+j6h4z3jk1LIV2XfTZj+QybR00jAaWhj4gcvKVrtcjZMLI+FQVBioa4z3hPqNRpM7p6IlG2Q1R2UcQL9ZoLODNPVpZNWy2aKo+i3bulSfAUUAFbjF/sAKpNVKE6GwkkSeutmx/G2YxAy0EOCXrnu5rkLIi6m0563Ks7QJIvYsquhpds9ySRYhoo6Qc7qSa5kiUvuqm8aJnZFbkBc4Aocwyr00TuJHGYX10fS8n99f+8vq0ffIyimmj/9d/q/+wIDAQAB",
+  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtwx9PREiGACFe7qqFZIkChif7TsEwl/qwEw841J2bAbqQK9RR3RBXJalb5IYxQ5r/s0p5F2qvuiUY92tzxv180at1xHgGXIHCOcHecXZ9lLQrCsXda9YR20forLZRshyB0R1EOrt+iu+GPLz/MqdEtHfWI/PR4FZ0TxcPkeJcDGlSShZr9qirApu/R1an3SJJqvCn1Ky6smEELjWVtXCEtP0hNJS+R5e8MeAWHVVH6vxZoiYP85sdUu06pxuaJJrXxs/K5bII3XRqSVcB1MhR7wigMW3dTVWqMojAxiPoX3xGVkqzuCc6oLoYGT4i9oS13O+Z6letqrd4m2oiSCpiwIDAQAB",
   "auth-server-url": "http://localhost:8080/auth",
   "ssl-required": "external",
   "resource": "Bankplus",

@@ -51,8 +51,8 @@
     </div>
 
     <div class="container">
-      <div ng-controller="FlashCtrl" class="alert alert-dismissible" ng-class="'alert-' + flash.getMessage().type" role="alert" ng-show="flash.getMessage().text.length > 0">
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+      <div ng-controller="FlashCtrl" class="alert alert-dismissible" ng-class="'alert-' + flash.getMessage().type" role="alert" ng-show="showAlert">
+        <button type="button" class="close" ng-click="hideAlert()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
         {{flash.getMessage().text}}
       </div>
       <div ng-view="">
@@ -90,6 +90,7 @@
     <script src="bower_components/angular-touch/angular-touch.js"></script>
     <script src="bower_components/keycloak/dist/keycloak.js"></script>
     <script src="bower_components/angular-utils-pagination/dirPagination.js"></script>
+    <script src="bower_components/angular-bootstrap/ui-bootstrap-tpls.js"></script>
     <!-- endbower -->
     <!-- endbuild -->
 
