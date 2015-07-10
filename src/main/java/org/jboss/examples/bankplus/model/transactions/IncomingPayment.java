@@ -1,8 +1,7 @@
 package org.jboss.examples.bankplus.model.transactions;
 
-import org.jboss.examples.bankplus.model.customer.Contact;
 import org.jboss.examples.bankplus.model.customer.Customer;
-import org.jboss.examples.bankplus.model.messages.OutgoingPaymentMessage;
+import org.jboss.examples.bankplus.model.messages.IncomingPaymentMessage;
 import org.jboss.examples.bankplus.model.money.Money;
 
 import javax.persistence.Embedded;
@@ -11,27 +10,26 @@ import javax.persistence.ManyToOne;
 import javax.persistence.OneToOne;
 
 @Entity
-public class Payment extends Event {
+public class IncomingPayment extends Event {
 
-    @ManyToOne
-    private Customer payer;
+    private String payer;
 
-    public Customer getPayer() {
+    public String getPayer() {
         return payer;
     }
 
-    public void setPayer(Customer payer) {
+    public void setPayer(String payer) {
         this.payer = payer;
     }
 
     @ManyToOne
-    private Contact payee;
+    private Customer payee;
 
-    public Contact getPayee() {
+    public Customer getPayee() {
         return payee;
     }
 
-    public void setPayee(Contact payee) {
+    public void setPayee(Customer payee) {
         this.payee = payee;
     }
 
@@ -47,13 +45,13 @@ public class Payment extends Event {
     }
 
     @OneToOne
-    private OutgoingPaymentMessage outgoingPaymentMessage;
+    private IncomingPaymentMessage incomingPaymentMessage;
 
-    public OutgoingPaymentMessage getOutgoingPaymentMessage() {
-        return outgoingPaymentMessage;
+    public IncomingPaymentMessage getIncomingPaymentMessage() {
+        return incomingPaymentMessage;
     }
 
-    public void setOutgoingPaymentMessage(OutgoingPaymentMessage outgoingPaymentMessage) {
-        this.outgoingPaymentMessage = outgoingPaymentMessage;
+    public void setIncomingPaymentMessage(IncomingPaymentMessage outgoingPaymentMessage) {
+        this.incomingPaymentMessage = outgoingPaymentMessage;
     }
 }

@@ -155,4 +155,15 @@ public class Account {
     public void setLastUpdatedOn(Date lastUpdatedOn) {
         this.lastUpdatedOn = lastUpdatedOn;
     }
+
+    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL)
+    private Set<AccountBalanceHistory> balanceHistories;
+
+    public Set<AccountBalanceHistory> getBalanceHistories() {
+        return  balanceHistories;
+    }
+
+    public void setBalanceHistories(Set<AccountBalanceHistory> balanceHistories) {
+        this.balanceHistories = balanceHistories;
+    }
 }

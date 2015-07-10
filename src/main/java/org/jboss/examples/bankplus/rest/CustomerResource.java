@@ -88,7 +88,6 @@ public class CustomerResource {
     @GET
     @Produces("application/json")
     public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult, @QueryParam("email") String email) {
-        System.out.println("Email:" + email);
         List<Customer> searchResults = customerService.listAll(startPosition, maxResult, email);
         final List<CustomerDTO> results = new ArrayList<CustomerDTO>();
         for (Customer searchResult : searchResults) {

@@ -36,7 +36,7 @@ public class WithdrawalService {
 
     public Withdrawal newWithdrawal(Customer from, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) == -1) {
-            throw new DepositException("Negative amount specified for withdrawal");
+            throw new WithdrawalException("Negative amount specified for withdrawal");
         }
         Withdrawal withdrawal = new Withdrawal();
         withdrawal.setWithdrawer(from);

@@ -12,7 +12,10 @@ import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
 
 @Stateless
 public class CustomerAccounts {
@@ -48,6 +51,7 @@ public class CustomerAccounts {
         customerAccount.setOpeningBalance(openingBalance);
         customerAccount.setCurrentBalance(openingBalance);
         customerAccount.setIban(iban);
+        customerAccount.setPeriodOpenDate(Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
         customerAccount.setLastUpdatedOn(new Date());
         Account liabilitiesAccount = accounts.getLiabilitiesAccount();
         if(liabilitiesAccount == null) {
@@ -56,5 +60,10 @@ public class CustomerAccounts {
         customerAccount.setParentAccount(liabilitiesAccount);
         em.persist(customerAccount);
         return customerAccount;
+    }
+
+    public List<CustomerAccount> listAll() {
+        TypedQuery<CustomerAccount> findAllQuery = em.createQuery("SELECT DISTINCT c FROM CustomerAccount c ORDER BY c.id", CustomerAccount.class);
+        return findAllQuery.getResultList();
     }
 }

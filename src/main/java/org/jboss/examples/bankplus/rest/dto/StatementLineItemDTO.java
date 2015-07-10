@@ -23,6 +23,8 @@ public class StatementLineItemDTO implements Serializable {
 
     private BigDecimal amount;
 
+    private BigDecimal balance;
+
     public StatementLineItemDTO() {
 
     }
@@ -75,5 +77,13 @@ public class StatementLineItemDTO implements Serializable {
 
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
+    }
+
+    public BigDecimal getBalance() {
+        return balance;
+    }
+
+    public void setBalance(BigDecimal balance) {
+        this.balance = balance;
     }
 }

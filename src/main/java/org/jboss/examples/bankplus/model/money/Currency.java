@@ -2,11 +2,14 @@ package org.jboss.examples.bankplus.model.money;
 
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlTransient;
 
 @Entity
 public class Currency {
 
     @Id
+    @XmlAttribute
     private String currencyCode;
 
     public String getCurrencyCode() {
@@ -17,6 +20,7 @@ public class Currency {
         this.currencyCode = currencyCode;
     }
 
+    @XmlTransient
     private String name;
 
     public String getName() {

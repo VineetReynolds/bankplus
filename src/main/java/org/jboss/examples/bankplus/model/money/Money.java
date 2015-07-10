@@ -1,9 +1,11 @@
 package org.jboss.examples.bankplus.model.money;
 
-import javax.persistence.Column;
 import javax.persistence.Embeddable;
 import javax.persistence.ManyToOne;
 import javax.validation.constraints.NotNull;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlValue;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.math.BigDecimal;
 
 @Embeddable
@@ -14,9 +16,12 @@ public class Money {
 
     @NotNull
     @ManyToOne
+    @XmlAttribute
+    @XmlJavaTypeAdapter(CurrencyAdapter.class)
     private Currency currency;
 
     @NotNull
+    @XmlValue
     private BigDecimal amount;
 
     public Money(Currency currency, BigDecimal amount) {

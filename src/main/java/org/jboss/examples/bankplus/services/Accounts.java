@@ -12,6 +12,9 @@ import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Date;
 
 @Stateless
 public class Accounts {
@@ -33,6 +36,7 @@ public class Accounts {
         Currency USD = currencies.findByCode("USD");
         account.setOpeningBalance(new Money(USD, BigDecimal.ZERO));
         account.setCurrentBalance(new Money(USD, BigDecimal.ZERO));
+        account.setPeriodOpenDate(Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
         account.setParentAccount(parentAccount);
         em.persist(account);
         return account;

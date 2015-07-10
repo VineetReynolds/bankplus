@@ -2,11 +2,8 @@ package org.jboss.examples.bankplus.rest;
 
 import org.jboss.examples.bankplus.model.customer.Contact;
 import org.jboss.examples.bankplus.model.customer.Customer;
-import org.jboss.examples.bankplus.model.transactions.Deposit;
 import org.jboss.examples.bankplus.model.transactions.Payment;
-import org.jboss.examples.bankplus.rest.dto.DepositDTO;
 import org.jboss.examples.bankplus.rest.dto.PaymentDTO;
-import org.jboss.examples.bankplus.services.DepositService;
 import org.jboss.examples.bankplus.services.PaymentService;
 
 import javax.ejb.Stateless;
@@ -37,7 +34,7 @@ public class PaymentsResource {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer from = em.find(Customer.class, customerId);
         Contact to = em.find(Contact.class, dto.getPayeeId());
-        Payment payment = paymentService.newPayment(from, to, dto.getAmount());
+        Payment payment = paymentService.newOutgoingPayment(from, to, dto.getAmount());
         return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(payment.getId())).build())
                 .build();
     }
