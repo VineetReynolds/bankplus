@@ -25,7 +25,7 @@ angular
     'ngRoute',
     'ngSanitize',
     'ngTouch',
-    'LocalStorageModule'
+    'angularUtils.directives.dirPagination'
   ])
   .config(['$routeProvider', function ($routeProvider) {
     $routeProvider
@@ -91,9 +91,6 @@ angular
       .otherwise({
         redirectTo: '/'
       });
-  }])
-  .config(['localStorageServiceProvider', function(localStorageServiceProvider){
-    localStorageServiceProvider.setPrefix('bankplus');
   }])
   .factory('Auth', function () {
     return auth;

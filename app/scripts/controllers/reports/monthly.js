@@ -8,10 +8,7 @@
  * Controller of the bankPlusApp
  */
 angular.module('bankPlusApp')
-  .controller('ReportsMonthlyCtrl', function ($scope) {
-    $scope.awesomeThings = [
-      'HTML5 Boilerplate',
-      'AngularJS',
-      'Karma'
-    ];
-  });
+  .controller('ReportsMonthlyCtrl', ['$scope', 'monthlyStatementResource', function ($scope, monthlyStatementResource) {
+    $scope.currentPage =1;
+    $scope.statementLines = monthlyStatementResource.queryAll({'customerId':auth.customer.id});
+  }]);
