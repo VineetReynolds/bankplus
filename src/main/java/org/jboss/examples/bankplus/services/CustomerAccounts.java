@@ -1,6 +1,7 @@
 package org.jboss.examples.bankplus.services;
 
 import org.jboss.examples.bankplus.model.accounting.Account;
+import org.jboss.examples.bankplus.model.accounting.AccountBalanceHistory;
 import org.jboss.examples.bankplus.model.customer.CustomerAccount;
 import org.jboss.examples.bankplus.model.money.Currency;
 import org.jboss.examples.bankplus.model.money.Money;
@@ -13,6 +14,7 @@ import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
@@ -43,6 +45,7 @@ public class CustomerAccounts {
     }
 
     public CustomerAccount create(String accountId, String name, String iban) {
+        Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
         CustomerAccount customerAccount = new CustomerAccount();
         customerAccount.setAccountId(accountId);
         customerAccount.setName(name);
@@ -51,8 +54,13 @@ public class CustomerAccounts {
         customerAccount.setOpeningBalance(openingBalance);
         customerAccount.setCurrentBalance(openingBalance);
         customerAccount.setIban(iban);
-        customerAccount.setPeriodOpenDate(Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
-        customerAccount.setLastUpdatedOn(new Date());
+        customerAccount.setPeriodOpenDate(now);
+        AccountBalanceHistory balanceHistory = new AccountBalanceHistory();
+        balanceHistory.setAccount(customerAccount);
+        balanceHistory.setDate(now);
+        balanceHistory.setOpeningBalance(openingBalance);
+        customerAccount.getBalanceHistories().add(balanceHistory);
+        customerAccount.setLastUpdatedOn(now);
         Account liabilitiesAccount = accounts.getLiabilitiesAccount();
         if(liabilitiesAccount == null) {
             throw new CustomerAccountException("Failed to find a parent Liabilities account for the customer account.");

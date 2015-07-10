@@ -53,4 +53,25 @@ public class AccountBalanceHistory {
     public void setOpeningBalance(Money balance) {
         this.openingBalance = balance;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AccountBalanceHistory)) return false;
+
+        AccountBalanceHistory that = (AccountBalanceHistory) o;
+
+        if (!account.equals(that.account)) return false;
+        if (!date.equals(that.date)) return false;
+        return openingBalance.equals(that.openingBalance);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = account.hashCode();
+        result = 31 * result + date.hashCode();
+        result = 31 * result + openingBalance.hashCode();
+        return result;
+    }
 }

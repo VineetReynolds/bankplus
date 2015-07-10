@@ -157,7 +157,7 @@ public class Account {
     }
 
     @OneToMany(mappedBy = "account", cascade = CascadeType.ALL)
-    private Set<AccountBalanceHistory> balanceHistories;
+    private Set<AccountBalanceHistory> balanceHistories = new HashSet<>();
 
     public Set<AccountBalanceHistory> getBalanceHistories() {
         return  balanceHistories;
