@@ -44,8 +44,8 @@ public class PaymentService {
     private Journal journal;
 
     public Payment newOutgoingPayment(Customer from, Contact to, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) == -1) {
-            throw new PaymentException("Negative amount specified for withdrawal");
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new PaymentException("A positive amount should be specified for the payment.");
         }
         Currency USD = currencies.findByCode("USD");
         Money chargeAmount = new Money(USD, amount.multiply(new BigDecimal("0.005")));

@@ -4,6 +4,7 @@ import org.jboss.examples.bankplus.model.customer.Contact;
 import org.jboss.examples.bankplus.model.customer.Customer;
 import org.jboss.examples.bankplus.model.transactions.Payment;
 import org.jboss.examples.bankplus.rest.dto.PaymentDTO;
+import org.jboss.examples.bankplus.services.PaymentException;
 import org.jboss.examples.bankplus.services.PaymentService;
 
 import javax.ejb.Stateless;
@@ -33,7 +34,14 @@ public class PaymentsResource {
     public Response create(PaymentDTO dto) {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer from = em.find(Customer.class, customerId);
-        Contact to = em.find(Contact.class, dto.getPayeeId());
+        Long payeeId = dto.getPayeeId();
+        if(payeeId == null) {
+            throw new PaymentException("Contact was not specified.");
+        }
+        Contact to = em.find(Contact.class, payeeId);
+        if(to == null) {
+            throw new PaymentException("Contact was not specified.");
+        }
         Payment payment = paymentService.newOutgoingPayment(from, to, dto.getAmount());
         return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(payment.getId())).build())
                 .build();

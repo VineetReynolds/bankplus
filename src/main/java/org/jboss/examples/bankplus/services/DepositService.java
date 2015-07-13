@@ -34,8 +34,8 @@ public class DepositService {
     private Journal journal;
 
     public Deposit newDeposit(Customer to, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) == -1) {
-            throw new DepositException("Negative amount specified for deposit");
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new DepositException("A positive amount should be specified for deposits.");
         }
         Deposit deposit = new Deposit();
         deposit.setDepositor(to);

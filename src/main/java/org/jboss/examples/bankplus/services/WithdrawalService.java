@@ -35,14 +35,19 @@ public class WithdrawalService {
     private Journal journal;
 
     public Withdrawal newWithdrawal(Customer from, BigDecimal amount) {
-        if (amount.compareTo(BigDecimal.ZERO) == -1) {
-            throw new WithdrawalException("Negative amount specified for withdrawal");
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new WithdrawalException("A positive amount should be specified for withdrawal.");
         }
+        Currency USD = currencies.findByCode("USD");
+        Money withdrawalAmount = new Money(USD, amount);
+        if(from.getCustomerAccount().getCurrentBalance().compareTo(withdrawalAmount) == -1) {
+            throw new WithdrawalException("Insufficient balance in the account");
+        }
+
         Withdrawal withdrawal = new Withdrawal();
         withdrawal.setWithdrawer(from);
         withdrawal.setDateTime(new Date());
-        Currency USD = currencies.findByCode("USD");
-        withdrawal.setWithdrawalAmount(new Money(USD, amount));
+        withdrawal.setWithdrawalAmount(withdrawalAmount);
         postJournalEntries(withdrawal);
         em.persist(withdrawal);
         // Can be moved off into a batch

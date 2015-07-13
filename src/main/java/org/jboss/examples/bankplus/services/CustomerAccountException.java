@@ -3,7 +3,7 @@ package org.jboss.examples.bankplus.services;
 import javax.ejb.ApplicationException;
 
 @ApplicationException(rollback = true)
-public class CustomerAccountException extends RuntimeException {
+public class CustomerAccountException extends BusinessException {
 
     public CustomerAccountException() {
         super();
