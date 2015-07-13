@@ -15,7 +15,8 @@ angular.module('bankPlusApp')
         flash.setMessage({'type':'success','text':'Your account has been debited.'});
         $location.path('/customers/dashboard');
       };
-      var errorCallback = function() {
+      var errorCallback = function(httpResponse) {
+        flash.setMessage({'type':'danger','text':httpResponse.data.message}, true);
         $scope.displayError = true;
       };
       withdrawalResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);

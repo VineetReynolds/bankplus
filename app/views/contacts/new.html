@@ -1,4 +1,4 @@
-<form name="newContactForm" class="form-horizontal" novalidate>
+<form name="newContactForm" class="form-horizontal" novalidate ng-submit="newContactForm.$valid && registerContact()">
     <fieldset>
 
         <legend>Register a contact</legend>
@@ -24,8 +24,8 @@
         <div class="form-group">
             <label class="col-md-4 control-label" for="registercontact"></label>
             <div class="col-md-8">
-                <button id="registercontact" name="registercontact" class="btn btn-success" ng-click="registerContact()">Register Contact</button>
-                <button id="reset" name="reset" class="btn btn-default">Reset</button>
+                <input id="registercontact" name="registercontact" class="btn btn-success" type="submit" value="Register Contact" ng-disabled="newContactForm.$invalid" />
+                <input id="reset" name="reset" class="btn btn-default" type="reset" />
             </div>
         </div>
 
