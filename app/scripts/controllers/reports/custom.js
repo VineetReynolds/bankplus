@@ -10,6 +10,7 @@
 angular.module('bankPlusApp')
   .controller('ReportsCustomCtrl', ['$scope', '$location', 'flash', 'customStatementResource', function ($scope, $location, flash, customStatementResource) {
     $scope.currentPage = 1;
+    $scope.statementLines = [];
 
     $scope.generateReport = function() {
       if($scope.fromDate > $scope.toDate) {
