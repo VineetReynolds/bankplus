@@ -107,6 +107,7 @@ angular
 
             deferred.resolve(config);
           }).error(function () {
+            Auth.authz.clearToken();
             deferred.reject('Failed to refresh token');
           });
         }
