@@ -51,6 +51,7 @@ public class CustomerResource {
 
     @POST
     @Consumes("application/json")
+    @Produces("application/json")
     public Response create(CustomerDTO dto) {
         Customer customer = customerService.create(dto);
         return Response.created(UriBuilder.fromResource(CustomerResource.class).path(String.valueOf(customer.getId())).build())
