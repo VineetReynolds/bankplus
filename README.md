@@ -10,7 +10,7 @@ Deployment
 
 Install as a JBoss module in the KeyCloak server:
 
-    KEYCLOAK_HOME/bin/jboss-cli.sh --command="module add --name=org.jboss.examples.bankplus --resources=target/event-listener-bankplus.jar --module-xml=src/main/etc/module.xml"
+    KEYCLOAK_HOME/bin/jboss-cli.sh --command="module add --name=org.jboss.examples.bankplus --resources=target/keycloak-provider.jar --module-xml=src/main/etc/module.xml"
 
 Then register the provider by editing keycloak-server.json and adding the module to the providers field:
 
