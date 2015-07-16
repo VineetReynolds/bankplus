@@ -32,10 +32,7 @@ angular
     $routeProvider
       .when('/', {
         templateUrl: 'views/dashboard.html',
-        controller: 'DashboardCtrl',
-        resolve: {
-          factory: checkRouting
-        }
+        controller: 'DashboardCtrl'
       })
       .when('/about', {
         templateUrl: 'views/about.html',
@@ -44,10 +41,6 @@ angular
       .when('/login', {
         templateUrl: 'views/login.html',
         controller: 'LoginCtrl'
-      })
-      .when('/accountPreferences', {
-        templateUrl: 'views/register.html',
-        controller: 'RegisterCtrl'
       })
       .when('/customers/dashboard', {
         templateUrl: 'views/dashboard.html',
@@ -100,7 +93,7 @@ angular
     return {
       'request': function (config) {
         var deferred = $q.defer();
-        if (Auth.authz.token) {
+        if (Auth.authz && Auth.authz.token) {
           Auth.authz.updateToken(5).success(function () {
             config.headers = config.headers || {};
             config.headers.Authorization = 'Bearer ' + Auth.authz.token;
@@ -140,15 +133,6 @@ angular
     $httpProvider.interceptors.push('errorInterceptor');
     $httpProvider.interceptors.push('authInterceptor');
   });
-
-var checkRouting= function ($q, $rootScope, $location) {
-  if (auth.shouldRegisterUser) {
-    $location.path("/accountPreferences");
-  } else {
-    return true;
-  }
-};
-
 
 angular.element(document).ready(function ($http) {
   var keycloakAuth = new Keycloak('keycloak.json');
@@ -190,7 +174,11 @@ angular.element(document).ready(function ($http) {
       return $q(function(resolve, reject){
         $http(req).then(function(response) {
           if (response.data.length == 0) {
-            auth.shouldRegisterUser = true;
+            // No matching customer record was found in BankPlus
+            console.log("Failed to locate customer in the backend.");
+            logout();
+            reject();
+            return;
           } else {
             auth.customer = response.data[0];
           }

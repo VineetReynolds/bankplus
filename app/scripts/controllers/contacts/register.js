@@ -13,7 +13,6 @@ angular.module('bankPlusApp')
     $scope.registerContact = function() {
       var contactToStore = {'fullName':$scope.contact.name, 'iban':$scope.contact.iban};
       var successCallback = function(data,responseHeaders){
-        auth.shouldRegisterUser = false;
         flash.setMessage({'type':'success','text':'The contact was added successfully.'});
         $location.path('/customers/dashboard');
       };
