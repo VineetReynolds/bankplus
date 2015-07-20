@@ -1,12 +1,12 @@
 package org.jboss.examples.bankplus.application;
 
 import com.google.common.collect.ImmutableList;
-import org.jboss.examples.bankplus.model.customer.CustomerAccount;
-import org.jboss.examples.bankplus.model.messages.IncomingPaymentMessage;
-import org.jboss.examples.bankplus.model.money.Currency;
-import org.jboss.examples.bankplus.model.money.Money;
-import org.jboss.examples.bankplus.services.Currencies;
-import org.jboss.examples.bankplus.services.CustomerAccounts;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
 
 import javax.annotation.Resource;
 import javax.ejb.Schedule;

@@ -14,6 +14,7 @@
 	</properties>
 	<dependencyManagement>
 		<dependencies>
+			<!-- Java EE 7 APIs -->
 			<dependency>
 				<groupId>org.jboss.spec</groupId>
 				<artifactId>jboss-javaee-7.0</artifactId>
@@ -21,6 +22,7 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- Annotations API for @Resource -->
 			<dependency>
 				<groupId>javax.annotation</groupId>
 				<artifactId>jsr250-api</artifactId>
@@ -30,52 +32,62 @@
 		</dependencies>
 	</dependencyManagement>
 	<dependencies>
+		<!-- JPA -->
 		<dependency>
 			<groupId>org.hibernate.javax.persistence</groupId>
 			<artifactId>hibernate-jpa-2.1-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- CDI -->
 		<dependency>
 			<groupId>javax.enterprise</groupId>
 			<artifactId>cdi-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Annotations API for @Resource -->
 		<dependency>
 			<groupId>javax.annotation</groupId>
 			<artifactId>jsr250-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- EJB -->
 		<dependency>
 			<groupId>org.jboss.spec.javax.ejb</groupId>
 			<artifactId>jboss-ejb-api_3.2_spec</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Servlets -->
 		<dependency>
 			<groupId>org.jboss.spec.javax.servlet</groupId>
 			<artifactId>jboss-servlet-api_3.1_spec</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- JAX-RS -->
 		<dependency>
 			<groupId>org.jboss.spec.javax.ws.rs</groupId>
 			<artifactId>jboss-jaxrs-api_2.0_spec</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Bean Validation -->
 		<dependency>
 			<groupId>javax.validation</groupId>
 			<artifactId>validation-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- JMS -->
 		<dependency>
 			<groupId>org.jboss.spec.javax.jms</groupId>
 			<artifactId>jboss-jms-api_2.0_spec</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- KeyCloak -->
 		<dependency>
 			<groupId>org.keycloak</groupId>
 			<artifactId>keycloak-core</artifactId>
 			<version>1.2.0.Final</version>
 			<scope>provided</scope>
 		</dependency>
+		<!-- JBoss EJB APIs for KeyCloak -->
 		<dependency>
 			<groupId>org.jboss.ejb3</groupId>
 			<artifactId>jboss-ejb3-ext-api</artifactId>

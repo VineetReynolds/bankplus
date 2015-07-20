@@ -2,10 +2,10 @@ package org.jboss.examples.bankplus.application;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import org.jboss.examples.bankplus.model.accounting.Account;
-import org.jboss.examples.bankplus.model.accounting.AccountType;
-import org.jboss.examples.bankplus.services.Accounts;
-import org.jboss.examples.bankplus.services.Currencies;
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.money.services.Currencies;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
