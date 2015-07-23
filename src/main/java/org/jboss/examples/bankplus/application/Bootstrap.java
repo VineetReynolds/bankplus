@@ -5,12 +5,15 @@ import com.google.common.collect.ImmutableSet;
 import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.AccountType;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
 import java.util.function.Consumer;
 
 @Stateless
@@ -37,21 +40,18 @@ public class Bootstrap {
     private Currencies currencies;
 
     public void createAccounts() {
-        currencies.create("United States Dollar", "USD");
-        ACCOUNTS.forEach(new Consumer<ImmutableMap<String, String>>() {
-            @Override
-            public void accept(ImmutableMap<String, String> accountInfo) {
-                String accountId = accountInfo.get("id");
-                String name = accountInfo.get("name");
-                AccountType accountType = Enum.valueOf(AccountType.class, accountInfo.get("type"));
-                String parent = accountInfo.get("parent");
-                Account parentAccount = null;
-                if(!parent.isEmpty()) {
-                    parentAccount = accounts.findByAccountId(parent);
-                }
-                accounts.newAccount(accountId, name, accountType, parentAccount);
-                em.flush();
+        Currency USD = currencies.create("United States Dollar", "USD");
+        ACCOUNTS.forEach(accountInfo -> {
+            String accountId = accountInfo.get("id");
+            String name = accountInfo.get("name");
+            AccountType accountType = Enum.valueOf(AccountType.class, accountInfo.get("type"));
+            String parent = accountInfo.get("parent");
+            Account parentAccount = null;
+            if(!parent.isEmpty()) {
+                parentAccount = accounts.findByAccountId(parent);
             }
+            accounts.newAccount(accountId, name, accountType, parentAccount, new Money(USD, BigDecimal.ZERO));
+            em.flush();
         });
     }
 }

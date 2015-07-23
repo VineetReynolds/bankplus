@@ -1,7 +1,11 @@
 package org.jboss.examples.bankplus.accounting.services;
 
+import org.iban4j.CountryCode;
+import org.iban4j.Iban;
 import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
 import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
@@ -12,10 +16,11 @@ import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
-import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
 
 @Stateless
 public class Accounts {
@@ -23,10 +28,7 @@ public class Accounts {
     @PersistenceContext
     private EntityManager em;
 
-    @Inject
-    private Currencies currencies;
-
-    public Account newAccount(String accountId, String name, AccountType accountType, Account parentAccount) {
+    public Account newAccount(String accountId, String name, AccountType accountType, Account parentAccount, Money openingBalance) {
         Account account = new Account();
         account.setAccountId(accountId);
         account.setName(name);
@@ -34,11 +36,20 @@ public class Accounts {
             throw new AccountException("The account type: [" + accountType + "] does not match the parent account's type: [" + parentAccount.getAccountType() + "]");
         }
         account.setAccountType(accountType);
-        Currency USD = currencies.findByCode("USD");
-        account.setOpeningBalance(new Money(USD, BigDecimal.ZERO));
-        account.setCurrentBalance(new Money(USD, BigDecimal.ZERO));
+        account.setOpeningBalance(openingBalance);
+        account.setCurrentBalance(openingBalance);
         account.setPeriodOpenDate(Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
         account.setParentAccount(parentAccount);
+
+        // Initialize account balance history
+        Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
+        AccountBalanceHistory balanceHistory = new AccountBalanceHistory();
+        balanceHistory.setAccount(account);
+        balanceHistory.setDate(now);
+        balanceHistory.setOpeningBalance(openingBalance);
+        account.getBalanceHistories().add(balanceHistory);
+        account.setLastUpdatedOn(now);
+
         em.persist(account);
         return account;
     }
@@ -77,5 +88,10 @@ public class Accounts {
         TypedQuery<Account> findByNameQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE UPPER(a.name) = 'LIABILITIES'", Account.class);
         Account liabiltiesAccount = findByNameQuery.getSingleResult();
         return liabiltiesAccount;
+    }
+
+    public List<Account> listLeafAccounts() {
+        TypedQuery<Account> findAllLeafAccountsQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE a.parentAccount != NULL AND a.childAccounts.size = 0 ORDER BY a.id", Account.class);
+        return findAllLeafAccountsQuery.getResultList();
     }
 }

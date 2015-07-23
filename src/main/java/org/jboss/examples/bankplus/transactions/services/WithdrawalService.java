@@ -42,7 +42,7 @@ public class WithdrawalService {
         }
         Currency USD = currencies.findByCode("USD");
         Money withdrawalAmount = new Money(USD, amount);
-        if(from.getCustomerAccount().getCurrentBalance().compareTo(withdrawalAmount) == -1) {
+        if(from.getCustomerAccount().getFinancialAccount().getCurrentBalance().compareTo(withdrawalAmount) == -1) {
             throw new WithdrawalException("Insufficient balance in the account");
         }
 
@@ -58,7 +58,7 @@ public class WithdrawalService {
     }
 
     private void postJournalEntries(Withdrawal withdrawal) {
-        Account withdrawalAccount = withdrawal.getWithdrawer().getCustomerAccount();
+        Account withdrawalAccount = withdrawal.getWithdrawer().getCustomerAccount().getFinancialAccount();
         Account cashAccount = accounts.getCashAccount();
         if(cashAccount == null) {
             throw new WithdrawalException("Failed to find a Cash account in the system.");

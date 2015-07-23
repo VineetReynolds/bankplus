@@ -36,6 +36,7 @@ public class Account {
         this.version = version;
     }
 
+    @Column(unique = true)
     private String accountId;
 
     public String getAccountId() {

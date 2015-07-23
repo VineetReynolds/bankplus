@@ -1,7 +1,10 @@
 package org.jboss.examples.bankplus.customer.services;
 
+import org.iban4j.CountryCode;
+import org.iban4j.Iban;
 import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
+import org.jboss.examples.bankplus.accounting.model.AccountType;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.money.model.Currency;
@@ -27,9 +30,6 @@ public class CustomerAccounts {
     private EntityManager em;
 
     @Inject
-    private Currencies currencies;
-
-    @Inject
     private Accounts accounts;
 
 
@@ -45,28 +45,24 @@ public class CustomerAccounts {
         return customerAccount;
     }
 
-    public CustomerAccount create(String accountId, String name, String iban) {
-        Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
-        CustomerAccount customerAccount = new CustomerAccount();
-        customerAccount.setAccountId(accountId);
-        customerAccount.setName(name);
-        Currency USD = currencies.findByCode("USD");
-        Money openingBalance = new Money(USD, BigDecimal.ZERO);
-        customerAccount.setOpeningBalance(openingBalance);
-        customerAccount.setCurrentBalance(openingBalance);
-        customerAccount.setIban(iban);
-        customerAccount.setPeriodOpenDate(now);
-        AccountBalanceHistory balanceHistory = new AccountBalanceHistory();
-        balanceHistory.setAccount(customerAccount);
-        balanceHistory.setDate(now);
-        balanceHistory.setOpeningBalance(openingBalance);
-        customerAccount.getBalanceHistories().add(balanceHistory);
-        customerAccount.setLastUpdatedOn(now);
+    public CustomerAccount create(String name, Money openingBalance) {
         Account liabilitiesAccount = accounts.getLiabilitiesAccount();
         if(liabilitiesAccount == null) {
             throw new CustomerAccountException("Failed to find a parent Liabilities account for the customer account.");
         }
-        customerAccount.setParentAccount(liabilitiesAccount);
+        Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
+        Long id = financialAccount.getId();
+        String accountId = String.format("2%010d", id);
+        String iban = new Iban.Builder()
+                .countryCode(CountryCode.GB)
+                .bankCode("PLUS")
+                .branchCode("001")
+                .accountNumber(accountId)
+                .build()
+                .toFormattedString();
+        CustomerAccount customerAccount = new CustomerAccount();
+        customerAccount.setFinancialAccount(financialAccount);
+        customerAccount.setIban(iban);
         em.persist(customerAccount);
         return customerAccount;
     }

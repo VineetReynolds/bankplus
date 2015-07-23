@@ -1,5 +1,6 @@
 package org.jboss.examples.bankplus.accounting.model;
 
+import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
@@ -25,16 +26,16 @@ import java.util.List;
 public class PeriodicBalanceCalculator {
 
     @Inject
-    private CustomerAccounts customerAccounts;
+    private Accounts accounts;
 
     @PersistenceContext
     private EntityManager em;
 
     @Schedule(minute = "*/1", hour = "*")
     public void scheduleBalanceComputation(){
-        List<CustomerAccount> allCustomerAccounts = customerAccounts.listAll();
-        for(CustomerAccount customerAccount: allCustomerAccounts) {
-            updateAccountBalance(customerAccount);
+        List<Account> allLeafAccounts = accounts.listLeafAccounts();
+        for(Account leafAccount: allLeafAccounts) {
+            updateAccountBalance(leafAccount);
         }
     }
 

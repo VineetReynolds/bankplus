@@ -54,7 +54,7 @@ public class PaymentService {
         Currency USD = currencies.findByCode("USD");
         Money chargeAmount = new Money(USD, amount.multiply(new BigDecimal("0.005")));
         Money totalTransactionAmount = new Money(USD, amount).add(chargeAmount);
-        if(from.getCustomerAccount().getCurrentBalance().compareTo(totalTransactionAmount) == -1) {
+        if(from.getCustomerAccount().getFinancialAccount().getCurrentBalance().compareTo(totalTransactionAmount) == -1) {
             throw new PaymentException("Insufficient balance in the account");
         }
 
@@ -64,7 +64,7 @@ public class PaymentService {
         payment.setDateTime(new Date());
         payment.setPaymentAmount(new Money(USD, amount));
         Charge chargesForPayment = new Charge();
-        chargesForPayment.setCollectedFrom(from.getCustomerAccount());
+        chargesForPayment.setCollectedFrom(from.getCustomerAccount().getFinancialAccount());
         chargesForPayment.setDateTime(new Date());
         chargesForPayment.setChargeAmount(chargeAmount);
         postJournalEntries(payment);
@@ -96,7 +96,7 @@ public class PaymentService {
         Money chargeAmount = new Money(USD, paymentAmount.getAmount().multiply(new BigDecimal("0.005")));
         payment.setPaymentAmount(paymentAmount);
         Charge chargesForPayment = new Charge();
-        chargesForPayment.setCollectedFrom(customerAccount);
+        chargesForPayment.setCollectedFrom(customerAccount.getFinancialAccount());
         chargesForPayment.setDateTime(new Date());
         chargesForPayment.setChargeAmount(chargeAmount);
         postJournalEntries(payment);
@@ -115,8 +115,9 @@ public class PaymentService {
 
     private void postJournalEntries(Payment payment) {
         Money amount = payment.getPaymentAmount();
-        Account payeeAccount = customerAccounts.findByIBAN(payment.getPayee().getIban());
-        if(payeeAccount == null) {
+        CustomerAccount internalCustomerAccount = customerAccounts.findByIBAN(payment.getPayee().getIban());
+        Account payeeAccount = null;
+        if(internalCustomerAccount == null) {
             Account clearingAccount = accounts.getClearingAccount();
             if(clearingAccount == null) {
                 throw new PaymentException("Failed to find a clearing house for the contact.");
@@ -124,6 +125,8 @@ public class PaymentService {
                 payeeAccount = clearingAccount;
                 generatePaymentMessage(payment);
             }
+        } else {
+            payeeAccount = internalCustomerAccount.getFinancialAccount();
         }
         Currency USD = currencies.findByCode("USD");
 
@@ -136,7 +139,7 @@ public class PaymentService {
         creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
-        debitEntry.setAccount(payment.getPayer().getCustomerAccount());
+        debitEntry.setAccount(payment.getPayer().getCustomerAccount().getFinancialAccount());
         debitEntry.setAmount(amount);
         debitEntry.setDateTime(payment.getDateTime());
         debitEntry.setFinancialEvent(payment);
@@ -189,7 +192,7 @@ public class PaymentService {
         Currency USD = currencies.findByCode("USD");
 
         final JournalEntry creditEntry = new JournalEntry();
-        creditEntry.setAccount(payment.getPayee().getCustomerAccount());
+        creditEntry.setAccount(payment.getPayee().getCustomerAccount().getFinancialAccount());
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(amount);
         creditEntry.setDateTime(payment.getDateTime());

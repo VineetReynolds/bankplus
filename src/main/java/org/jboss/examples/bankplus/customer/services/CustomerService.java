@@ -1,16 +1,16 @@
 package org.jboss.examples.bankplus.customer.services;
 
-import org.iban4j.CountryCode;
-import org.iban4j.Iban;
 import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
 import javax.persistence.*;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Stateless
@@ -28,20 +28,10 @@ public class CustomerService {
     public Customer create(CustomerDTO dto) {
         Customer customer = dto.fromDTO(null, em);
         Currency USD = currencies.findByCode("USD");
-        CustomerAccount customerAccount = customerAccounts.create(null, "Customer account for " + customer.getFullName(), null);
+        CustomerAccount customerAccount = customerAccounts.create("Customer account for " + customer.getFullName(), new Money(USD, BigDecimal.ZERO));
         customer.setCustomerAccount(customerAccount);
         customerAccount.setCustomer(customer);
         em.persist(customer);
-        Long id = customer.getCustomerAccount().getId();
-        String accountId = String.format("2%010d", id);
-        String iban = new Iban.Builder()
-                .countryCode(CountryCode.AT)
-                .bankCode("19043")
-                .accountNumber(accountId)
-                .build()
-                .toFormattedString();
-        customer.getCustomerAccount().setAccountId(accountId);
-        customer.getCustomerAccount().setIban(iban);
         return customer;
     }
 

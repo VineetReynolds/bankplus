@@ -53,7 +53,7 @@ public class DepositService {
     }
 
     private void postJournalEntries(Deposit deposit) {
-        Account depositorAccount = deposit.getDepositor().getCustomerAccount();
+        Account depositorAccount = deposit.getDepositor().getCustomerAccount().getFinancialAccount();
         Account cashAccount = accounts.getCashAccount();
         if(cashAccount == null) {
             throw new DepositException("Failed to find a Cash account in the system.");
