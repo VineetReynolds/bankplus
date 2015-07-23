@@ -1,15 +1,11 @@
 package org.jboss.examples.bankplus.customer.services;
 
-import org.iban4j.CountryCode;
-import org.iban4j.Iban;
 import org.jboss.examples.bankplus.accounting.model.Account;
-import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
 import org.jboss.examples.bankplus.accounting.model.AccountType;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.customer.iban.USIban;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
-import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.money.model.Money;
-import org.jboss.examples.bankplus.money.services.Currencies;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
@@ -17,10 +13,6 @@ import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Date;
 import java.util.List;
 
 @Stateless
@@ -53,10 +45,9 @@ public class CustomerAccounts {
         Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
         Long id = financialAccount.getId();
         String accountId = String.format("2%010d", id);
-        String iban = new Iban.Builder()
-                .countryCode(CountryCode.GB)
+
+        String iban = new USIban.Builder()
                 .bankCode("PLUS")
-                .branchCode("001")
                 .accountNumber(accountId)
                 .build()
                 .toFormattedString();

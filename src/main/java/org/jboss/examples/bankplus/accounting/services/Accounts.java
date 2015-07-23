@@ -1,17 +1,11 @@
 package org.jboss.examples.bankplus.accounting.services;
 
-import org.iban4j.CountryCode;
-import org.iban4j.Iban;
 import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
 import org.jboss.examples.bankplus.accounting.model.AccountType;
-import org.jboss.examples.bankplus.customer.model.CustomerAccount;
-import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.money.model.Money;
-import org.jboss.examples.bankplus.money.services.Currencies;
 
 import javax.ejb.Stateless;
-import javax.inject.Inject;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
