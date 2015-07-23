@@ -44,7 +44,7 @@ public class CustomerAccounts {
         }
         Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
         Long id = financialAccount.getId();
-        String accountId = String.format("2%010d", id);
+        String accountId = String.format("2%019d", id);
 
         String iban = new USIban.Builder()
                 .bankCode("PLUS")
