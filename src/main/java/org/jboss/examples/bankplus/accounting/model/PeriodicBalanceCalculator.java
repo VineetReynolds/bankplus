@@ -111,7 +111,7 @@ public class PeriodicBalanceCalculator {
             journalEntryQuery = em.createQuery(query, JournalEntry.class);
             journalEntryQuery.setParameter("account", account);
             journalEntryQuery.setParameter("from", Date.from(from.atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
-            journalEntryQuery.setParameter("to", Date.from(to.atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
+            journalEntryQuery.setParameter("to", Date.from(to.plusDays(1).atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
         }
         List<JournalEntry> entries = journalEntryQuery.getResultList();
         return entries;
