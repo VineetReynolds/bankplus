@@ -50,7 +50,7 @@
       </div>
     </div>
 
-    <div class="container">
+    <div class="container" ng-cloak="">
       <div ng-controller="FlashCtrl" class="alert alert-dismissible" ng-class="'alert-' + flash.getMessage().type" role="alert" ng-show="showAlert">
         <button type="button" class="close" ng-click="hideAlert()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
         {{flash.getMessage().text}}
