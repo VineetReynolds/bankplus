@@ -88,7 +88,7 @@ public class Money {
 
     @Override
     public String toString() {
-        return "Money [" + currency + ", " + amount + "]";
+        return "Money [" + currency.getCurrencyCode() + ", " + amount + "]";
     }
 
     public BigDecimal getAmount() {

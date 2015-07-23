@@ -30,4 +30,11 @@ public class Currency {
     public void setName(String name) {
         this.name = name;
     }
+
+    @Override
+    public String toString() {
+        return "Currency{" +
+                "currencyCode='" + currencyCode + '\'' +
+                '}';
+    }
 }

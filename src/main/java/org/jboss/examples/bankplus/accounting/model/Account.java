@@ -167,4 +167,12 @@ public class Account {
     public void setBalanceHistories(Set<AccountBalanceHistory> balanceHistories) {
         this.balanceHistories = balanceHistories;
     }
+
+    @Override
+    public String toString() {
+        return "Account{" +
+                "accountId='" + accountId + '\'' +
+                ", name='" + name + '\'' +
+                '}';
+    }
 }
