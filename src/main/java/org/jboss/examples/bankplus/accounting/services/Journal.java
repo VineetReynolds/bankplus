@@ -55,7 +55,7 @@ public class Journal {
 
     public void postToLedger(Set<JournalEntry> entries) {
         for(JournalEntry entry: entries) {
-            if(entry.getPostingStatus() == PostingStatus.UNPOSTED) {
+            if(entry.getPostingStatus() == null || entry.getPostingStatus() == PostingStatus.UNPOSTED) {
                 entry.setPostingStatus(PostingStatus.POSTED);
                 em.persist(entry);
                 computeAccountBalance(entry.getAccount());
@@ -78,5 +78,15 @@ public class Journal {
         }
         List<JournalEntry> entries = journalEntryQuery.getResultList();
         return entries;
+    }
+
+    public void recordJournalEntries(Set<JournalEntry> entries) {
+        for(JournalEntry entry: entries) {
+            if(entry.getPostingStatus() == null) {
+                entry.setPostingStatus(PostingStatus.UNPOSTED);
+            }
+            em.persist(entry);
+        }
+        postToLedger(entries);
     }
 }

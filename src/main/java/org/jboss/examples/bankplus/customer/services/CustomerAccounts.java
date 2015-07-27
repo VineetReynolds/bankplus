@@ -1,10 +1,10 @@
 package org.jboss.examples.bankplus.customer.services;
 
-import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.AccountType;
-import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.customer.iban.USIban;
+import org.jboss.examples.bankplus.customer.model.Account;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.customer.services.client.Accounts;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.ejb.Stateless;
@@ -43,12 +43,11 @@ public class CustomerAccounts {
             throw new CustomerAccountException("Failed to find a parent Liabilities account for the customer account.");
         }
         Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
-        Long id = financialAccount.getId();
-        String accountId = String.format("2%019d", id);
+        Long id = financialAccount.getDatabaseId();
 
         String iban = new USIban.Builder()
                 .bankCode("PLUS")
-                .accountNumber(accountId)
+                .accountNumber(financialAccount.getAccountReference())
                 .build()
                 .toFormattedString();
         CustomerAccount customerAccount = new CustomerAccount();

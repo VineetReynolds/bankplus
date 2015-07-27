@@ -4,12 +4,14 @@ import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
 import org.jboss.examples.bankplus.accounting.model.EntryType;
 import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.core.rest.dto.DateWrapper;
 import org.jboss.examples.bankplus.reporting.rest.dto.StatementLineItemDTO;
 
 import javax.ejb.Stateless;
+import javax.inject.Inject;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceContext;
@@ -39,12 +41,15 @@ public class ReportsResource {
     @PersistenceContext(unitName = "Bankplus-persistence-unit")
     private EntityManager em;
 
+    @Inject
+    private Accounts accounts;
+
     @GET
     @Path("/monthly")
     @Produces("application/json")
     public Response getMonthlyReport(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
         LocalDate start = LocalDate.now().withDayOfMonth(1);
-        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j LEFT JOIN FETCH j.financialEvent WHERE j.account = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j WHERE j.account.accountId = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
         if (startPosition != null) {
             findAllQuery.setFirstResult(startPosition);
         }
@@ -53,12 +58,12 @@ public class ReportsResource {
         }
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = em.find(Customer.class, customerId);
-        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount());
+        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount().getAccountReference());
         findAllQuery.setParameter("start", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         final List<JournalEntry> searchResults = findAllQuery.getResultList();
 
-        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
-        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account.accountId = :accountId AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount().getAccountReference());
         accountBalanceHistoryQuery.setParameter("date", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
 
         Money openingBalance = null;
@@ -68,8 +73,9 @@ public class ReportsResource {
             openingBalance = monthlyStartingAccountBalance.getOpeningBalance();
             openDate = monthlyStartingAccountBalance.getDate();
         } catch (NoResultException noRes) {
-            openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
-            openDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+            Account financialAccount = accounts.findByAccountId(customer.getCustomerAccount().getFinancialAccount().getAccountReference());
+            openingBalance = financialAccount.getOpeningBalance();
+            openDate = financialAccount.getPeriodOpenDate();
         }
 
         StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
@@ -94,7 +100,7 @@ public class ReportsResource {
     @Produces("application/json")
     public Response getYearlyReport(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
         LocalDate start = LocalDate.now().withDayOfMonth(1).withDayOfYear(1);
-        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j WHERE j.account = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j WHERE j.account.accountId = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
         if (startPosition != null) {
             findAllQuery.setFirstResult(startPosition);
         }
@@ -103,12 +109,12 @@ public class ReportsResource {
         }
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = em.find(Customer.class, customerId);
-        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount());
+        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount().getAccountReference());
         findAllQuery.setParameter("start", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
         final List<JournalEntry> searchResults = findAllQuery.getResultList();
 
-        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
-        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account.accountId = :accountId AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount().getAccountReference());
         accountBalanceHistoryQuery.setParameter("date", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
 
         Money openingBalance = null;
@@ -118,8 +124,9 @@ public class ReportsResource {
             openingBalance = yearlyStartingAccountBalance.getOpeningBalance();
             openDate = yearlyStartingAccountBalance.getDate();
         } catch (NoResultException noRes) {
-            openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
-            openDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+            Account financialAccount = accounts.findByAccountId(customer.getCustomerAccount().getFinancialAccount().getAccountReference());
+            openingBalance = financialAccount.getOpeningBalance();
+            openDate = financialAccount.getPeriodOpenDate();
         }
 
         StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
@@ -175,7 +182,8 @@ public class ReportsResource {
         }
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = em.find(Customer.class, customerId);
-        findAllQuery.setParameter(accountParam, customer.getCustomerAccount().getFinancialAccount());
+        Account financialAccount = accounts.findByAccountId(customer.getCustomerAccount().getFinancialAccount().getAccountReference());
+        findAllQuery.setParameter(accountParam, financialAccount);
         final List<JournalEntry> searchResults = findAllQuery.getResultList();
         final List<StatementLineItemDTO> results = new ArrayList<>();
 
@@ -190,12 +198,12 @@ public class ReportsResource {
             openingBalance = periodOpenAccountBalance.getOpeningBalance();
             openDate = periodOpenAccountBalance.getDate();
         } catch (NoResultException noRes) {
-            Date accountOpenDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+            Date accountOpenDate = financialAccount.getPeriodOpenDate();
             if((from != null && (from.equals(accountOpenDate) || from.before(accountOpenDate)))
                     || (to != null && (to.equals(accountOpenDate) || to.after(accountOpenDate)))
                     || (from == null && to == null)) {
                 openDate = accountOpenDate;
-                openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
+                openingBalance = financialAccount.getOpeningBalance();
             }
         }
 

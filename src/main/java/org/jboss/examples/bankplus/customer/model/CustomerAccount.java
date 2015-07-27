@@ -1,7 +1,5 @@
 package org.jboss.examples.bankplus.customer.model;
 
-import org.jboss.examples.bankplus.accounting.model.Account;
-
 import javax.persistence.*;
 
 @Entity
@@ -53,7 +51,7 @@ public class CustomerAccount {
         this.customer = customer;
     }
 
-    @OneToOne
+    @Embedded
     private Account financialAccount;
 
     public Account getFinancialAccount() {

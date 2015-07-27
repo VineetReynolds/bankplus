@@ -1,12 +1,10 @@
 package org.jboss.examples.bankplus.transactions.model;
 
-import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.persistence.Embedded;
 import javax.persistence.Entity;
-import javax.persistence.ManyToOne;
 import javax.persistence.OneToOne;
 
 @Entity
@@ -22,7 +20,7 @@ public class IncomingPayment extends Event {
         this.payer = payer;
     }
 
-    @ManyToOne
+    @Embedded
     private Customer payee;
 
     public Customer getPayee() {

@@ -29,7 +29,7 @@ public class StatementLineItemDTO implements Serializable {
         if (entity != null) {
             this.id = entity.getId();
             this.dateTime = entity.getDateTime();
-            this.description = entity.getFinancialEvent().getDescription();
+            this.description = entity.getDescription();
             this.type = entity.getType() == EntryType.CREDIT ? "Deposit" : "Withdrawal";
             this.amount = entity.getAmount().getAmount();
         }

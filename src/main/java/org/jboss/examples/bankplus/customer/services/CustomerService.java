@@ -1,7 +1,9 @@
 package org.jboss.examples.bankplus.customer.services;
 
+import org.jboss.examples.bankplus.customer.model.Account;
 import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.customer.services.client.Accounts;
 import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
 import org.jboss.examples.bankplus.money.model.Money;
@@ -24,6 +26,9 @@ public class CustomerService {
 
     @Inject
     private CustomerAccounts customerAccounts;
+
+    @Inject
+    private Accounts accounts;
 
     public Customer create(CustomerDTO dto) {
         Customer customer = dto.fromDTO(null, em);
@@ -53,6 +58,8 @@ public class CustomerService {
         } catch (NoResultException nre) {
             entity = null;
         }
+        Account financialAccount = accounts.findByAccountId(entity.getCustomerAccount().getFinancialAccount().getAccountReference());
+        entity.getCustomerAccount().setFinancialAccount(financialAccount);
         return entity;
     }
 
@@ -71,6 +78,11 @@ public class CustomerService {
             findAllQuery.setMaxResults(maxResult);
         }
         final List<Customer> searchResults = findAllQuery.getResultList();
+
+        for(Customer customer: searchResults) {
+            Account financialAccount = accounts.findByAccountId(customer.getCustomerAccount().getFinancialAccount().getAccountReference());
+            customer.getCustomerAccount().setFinancialAccount(financialAccount);
+        }
         return searchResults;
     }
 
@@ -88,4 +100,15 @@ public class CustomerService {
         return entity;
     }
 
+    public Customer findByIBAN(String iban) {
+        TypedQuery<Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN c.customerAccount acc WHERE acc.iban = :iban ORDER BY c.id", Customer.class);
+        findByIdQuery.setParameter("iban", iban);
+        Customer entity;
+        try {
+            entity = findByIdQuery.getSingleResult();
+        } catch (NoResultException nre) {
+            entity = null;
+        }
+        return entity;
+    }
 }

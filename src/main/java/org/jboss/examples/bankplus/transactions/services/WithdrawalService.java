@@ -1,16 +1,15 @@
 package org.jboss.examples.bankplus.transactions.services;
 
-import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.EntryType;
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
-import org.jboss.examples.bankplus.accounting.model.PostingStatus;
-import org.jboss.examples.bankplus.accounting.services.Accounts;
-import org.jboss.examples.bankplus.accounting.services.Journal;
-import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.transactions.model.Account;
+import org.jboss.examples.bankplus.transactions.model.Customer;
+import org.jboss.examples.bankplus.transactions.model.JournalEntry;
 import org.jboss.examples.bankplus.transactions.model.Withdrawal;
+import org.jboss.examples.bankplus.transactions.services.client.Accounts;
+import org.jboss.examples.bankplus.transactions.services.client.Journal;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
@@ -50,14 +49,16 @@ public class WithdrawalService {
         withdrawal.setWithdrawer(from);
         withdrawal.setDateTime(new Date());
         withdrawal.setWithdrawalAmount(withdrawalAmount);
-        postJournalEntries(withdrawal);
+        withdrawal.setDescription("Withdrawal: " + withdrawal.getWithdrawalAmount().getCurrency().getCurrencyCode() + " " + withdrawal.getWithdrawalAmount().getAmount()
+                + " to account by " + withdrawal.getWithdrawer().getFullName());
+        Set<JournalEntry> journalEntries = prepareJournalEntries(withdrawal);
         em.persist(withdrawal);
         // Can be moved off into a batch
-        journal.postToLedger(withdrawal.getJournalEntries());
+        journal.recordJournalEntries(journalEntries);
         return withdrawal;
     }
 
-    private void postJournalEntries(Withdrawal withdrawal) {
+    private Set<JournalEntry> prepareJournalEntries(Withdrawal withdrawal) {
         Account withdrawalAccount = withdrawal.getWithdrawer().getCustomerAccount().getFinancialAccount();
         Account cashAccount = accounts.getCashAccount();
         if(cashAccount == null) {
@@ -68,24 +69,19 @@ public class WithdrawalService {
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(withdrawal.getWithdrawalAmount());
         creditEntry.setDateTime(withdrawal.getDateTime());
-        creditEntry.setFinancialEvent(withdrawal);
-        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        creditEntry.setEventReference(withdrawal.getId());
+        creditEntry.setDescription(withdrawal.getDescription());
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(withdrawalAccount);
         debitEntry.setAmount(withdrawal.getWithdrawalAmount());
         debitEntry.setDateTime(withdrawal.getDateTime());
-        debitEntry.setFinancialEvent(withdrawal);
-        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        debitEntry.setEventReference(withdrawal.getId());
+        debitEntry.setDescription(withdrawal.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(debitEntry);
         journalEntries.add(creditEntry);
-
-        String description = "Withdrawal: " + withdrawal.getWithdrawalAmount().getCurrency().getCurrencyCode() + " " +  withdrawal.getWithdrawalAmount().getAmount()
-                + " to account by " + withdrawal.getWithdrawer().getFullName();
-
-        withdrawal.setDescription(description);
-        withdrawal.setJournalEntries(journalEntries);
+        return journalEntries;
     }
 
 }

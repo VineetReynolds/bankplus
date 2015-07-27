@@ -1,16 +1,14 @@
 package org.jboss.examples.bankplus.transactions.model;
 
-import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.persistence.Embedded;
 import javax.persistence.Entity;
-import javax.persistence.ManyToOne;
 
 @Entity
 public class Withdrawal extends Event {
 
-    @ManyToOne
+    @Embedded
     private Customer withdrawer;
 
     public Customer getWithdrawer() {

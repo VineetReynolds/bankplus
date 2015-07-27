@@ -1,23 +1,15 @@
 package org.jboss.examples.bankplus.transactions.services;
 
-import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.EntryType;
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
-import org.jboss.examples.bankplus.accounting.model.PostingStatus;
-import org.jboss.examples.bankplus.accounting.services.Accounts;
-import org.jboss.examples.bankplus.accounting.services.Journal;
-import org.jboss.examples.bankplus.customer.model.Contact;
-import org.jboss.examples.bankplus.customer.model.Customer;
-import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
 import org.jboss.examples.bankplus.messages.model.OutgoingPaymentMessage;
 import org.jboss.examples.bankplus.money.model.Currency;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
-import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
-import org.jboss.examples.bankplus.transactions.model.Charge;
-import org.jboss.examples.bankplus.transactions.model.IncomingPayment;
-import org.jboss.examples.bankplus.transactions.model.Payment;
+import org.jboss.examples.bankplus.transactions.model.*;
+import org.jboss.examples.bankplus.transactions.services.client.Accounts;
+import org.jboss.examples.bankplus.transactions.services.client.Customers;
+import org.jboss.examples.bankplus.transactions.services.client.Journal;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
@@ -42,7 +34,7 @@ public class PaymentService {
     private Accounts accounts;
 
     @Inject
-    private CustomerAccounts customerAccounts;
+    private Customers customers;
 
     @Inject
     private Journal journal;
@@ -67,26 +59,32 @@ public class PaymentService {
         chargesForPayment.setCollectedFrom(from.getCustomerAccount().getFinancialAccount());
         chargesForPayment.setDateTime(new Date());
         chargesForPayment.setChargeAmount(chargeAmount);
-        postJournalEntries(payment);
-        postJournalEntries(chargesForPayment, payment);
+
+        payment.setDescription("Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName());
+        Set<JournalEntry> journalEntriesForPayment = prepareJournalEntries(payment);
+
+        chargesForPayment.setDescription("Service charge for Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName());
+        Set<JournalEntry> journalEntriesForCharges = prepareJournalEntries(chargesForPayment, payment);
         em.persist(payment);
         em.persist(chargesForPayment);
         // Can be moved off into a batch
-        journal.postToLedger(payment.getJournalEntries());
-        journal.postToLedger(chargesForPayment.getJournalEntries());
+        journal.recordJournalEntries(journalEntriesForPayment);
+        journal.recordJournalEntries(journalEntriesForCharges);
         return payment;
     }
 
     public IncomingPayment newIncomingPayment(IncomingPaymentMessage incomingPaymentMessage) {
         Currency USD = currencies.findByCode("USD");
-        CustomerAccount customerAccount = customerAccounts.findByIBAN(incomingPaymentMessage.getBeneficiary());
-        if(customerAccount == null) {
+        Customer customer = customers.findByIBAN(incomingPaymentMessage.getBeneficiary());
+        if(customer == null) {
             // TODO Post the payment message to a failed message queue.
             // TODO How do institutions handle this?
             Logger.getLogger(PaymentService.class.getName()).severe("Failed to find customer account");
             return null;
         }
-        Customer to = customerAccount.getCustomer();
+        Customer to = customer;
 
         IncomingPayment payment = new IncomingPayment();
         payment.setPayer(incomingPaymentMessage.getOrderingCustomer());
@@ -96,11 +94,15 @@ public class PaymentService {
         Money chargeAmount = new Money(USD, paymentAmount.getAmount().multiply(new BigDecimal("0.005")));
         payment.setPaymentAmount(paymentAmount);
         Charge chargesForPayment = new Charge();
-        chargesForPayment.setCollectedFrom(customerAccount.getFinancialAccount());
+        chargesForPayment.setCollectedFrom(customer.getCustomerAccount().getFinancialAccount());
         chargesForPayment.setDateTime(new Date());
         chargesForPayment.setChargeAmount(chargeAmount);
-        postJournalEntries(payment);
-        postJournalEntries(chargesForPayment, payment);
+        payment.setDescription("Incoming payment from " + payment.getPayer() +
+                " to " + payment.getPayee().getFullName());
+        Set<JournalEntry> journalEntriesForPayment = prepareJournalEntries(payment);
+        chargesForPayment.setDescription("Service charge for Incoming payment from " + payment.getPayer() +
+                " to " + payment.getPayee().getFullName());
+        Set<JournalEntry> journalEntriesForCharges = prepareJournalEntries(chargesForPayment, payment);
 
         payment.setIncomingPaymentMessage(incomingPaymentMessage);
 
@@ -108,16 +110,16 @@ public class PaymentService {
         em.persist(chargesForPayment);
         em.persist(incomingPaymentMessage);
         // Can be moved off into a batch
-        journal.postToLedger(payment.getJournalEntries());
-        journal.postToLedger(chargesForPayment.getJournalEntries());
+        journal.recordJournalEntries(journalEntriesForPayment);
+        journal.recordJournalEntries(journalEntriesForCharges);
         return payment;
     }
 
-    private void postJournalEntries(Payment payment) {
+    private Set<JournalEntry> prepareJournalEntries(Payment payment) {
         Money amount = payment.getPaymentAmount();
-        CustomerAccount internalCustomerAccount = customerAccounts.findByIBAN(payment.getPayee().getIban());
+        Customer internalCustomer = customers.findByIBAN(payment.getPayee().getIban());
         Account payeeAccount = null;
-        if(internalCustomerAccount == null) {
+        if(internalCustomer == null) {
             Account clearingAccount = accounts.getClearingAccount();
             if(clearingAccount == null) {
                 throw new PaymentException("Failed to find a clearing house for the contact.");
@@ -126,7 +128,7 @@ public class PaymentService {
                 generatePaymentMessage(payment);
             }
         } else {
-            payeeAccount = internalCustomerAccount.getFinancialAccount();
+            payeeAccount = internalCustomer.getCustomerAccount().getFinancialAccount();
         }
         Currency USD = currencies.findByCode("USD");
 
@@ -135,27 +137,22 @@ public class PaymentService {
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(amount);
         creditEntry.setDateTime(payment.getDateTime());
-        creditEntry.setFinancialEvent(payment);
-        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        creditEntry.setEventReference(payment.getId());
+        creditEntry.setDescription(payment.getDescription());
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(payment.getPayer().getCustomerAccount().getFinancialAccount());
         debitEntry.setAmount(amount);
         debitEntry.setDateTime(payment.getDateTime());
-        debitEntry.setFinancialEvent(payment);
-        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        debitEntry.setEventReference(payment.getId());
+        debitEntry.setDescription(payment.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(debitEntry);
         journalEntries.add(creditEntry);
-
-        String description = "Payment from " + payment.getPayer().getFullName() +
-                " to " + payment.getPayee().getFullName();
-
-        payment.setDescription(description);
-        payment.setJournalEntries(journalEntries);
+        return journalEntries;
     }
 
-    private void postJournalEntries(Charge chargesForPayment, Payment payment) {
+    private Set<JournalEntry> prepareJournalEntries(Charge chargesForPayment, Payment payment) {
         Currency USD = currencies.findByCode("USD");
         Money charges = chargesForPayment.getChargeAmount();
         final JournalEntry chargesEntry = new JournalEntry();
@@ -163,27 +160,22 @@ public class PaymentService {
         chargesEntry.setAccount(accounts.getChargesAccount());
         chargesEntry.setAmount(charges);
         chargesEntry.setDateTime(chargesForPayment.getDateTime());
-        chargesEntry.setFinancialEvent(chargesForPayment);
-        chargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        chargesEntry.setEventReference(chargesForPayment.getId());
+        chargesEntry.setDescription(chargesForPayment.getDescription());
         final JournalEntry deductChargesEntry = new JournalEntry();
         deductChargesEntry.setType(EntryType.DEBIT);
         deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
         deductChargesEntry.setAmount(charges);
         deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
-        deductChargesEntry.setFinancialEvent(chargesForPayment);
-        deductChargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        deductChargesEntry.setEventReference(chargesForPayment.getId());
+        deductChargesEntry.setDescription(chargesForPayment.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(chargesEntry);
         journalEntries.add(deductChargesEntry);
-
-        String description = "Service charge for Payment from " + payment.getPayer().getFullName() +
-                " to " + payment.getPayee().getFullName();
-
-        chargesForPayment.setDescription(description);
-        chargesForPayment.setJournalEntries(journalEntries);
+        return journalEntries;
     }
 
-    private void postJournalEntries(IncomingPayment payment) {
+    private Set<JournalEntry> prepareJournalEntries(IncomingPayment payment) {
         Money amount = payment.getPaymentAmount();
         Account payeeAccount = accounts.getClearingAccount();
         if(payeeAccount == null) {
@@ -196,27 +188,22 @@ public class PaymentService {
         creditEntry.setType(EntryType.CREDIT);
         creditEntry.setAmount(amount);
         creditEntry.setDateTime(payment.getDateTime());
-        creditEntry.setFinancialEvent(payment);
-        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        creditEntry.setEventReference(payment.getId());
+        creditEntry.setDescription(payment.getDescription());
         final JournalEntry debitEntry = new JournalEntry();
         debitEntry.setType(EntryType.DEBIT);
         debitEntry.setAccount(payeeAccount);
         debitEntry.setAmount(amount);
         debitEntry.setDateTime(payment.getDateTime());
-        debitEntry.setFinancialEvent(payment);
-        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        debitEntry.setEventReference(payment.getId());
+        debitEntry.setDescription(payment.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(debitEntry);
         journalEntries.add(creditEntry);
-
-        String description = "Incoming payment from " + payment.getPayer() +
-                " to " + payment.getPayee().getFullName();
-
-        payment.setDescription(description);
-        payment.setJournalEntries(journalEntries);
+        return journalEntries;
     }
 
-    private void postJournalEntries(Charge chargesForPayment, IncomingPayment payment) {
+    private Set<JournalEntry> prepareJournalEntries(Charge chargesForPayment, IncomingPayment payment) {
         Currency USD = currencies.findByCode("USD");
         Money charges = chargesForPayment.getChargeAmount();
         final JournalEntry chargesEntry = new JournalEntry();
@@ -224,24 +211,19 @@ public class PaymentService {
         chargesEntry.setAccount(accounts.getChargesAccount());
         chargesEntry.setAmount(charges);
         chargesEntry.setDateTime(chargesForPayment.getDateTime());
-        chargesEntry.setFinancialEvent(chargesForPayment);
-        chargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        chargesEntry.setEventReference(chargesForPayment.getId());
+        chargesEntry.setDescription(payment.getDescription());
         final JournalEntry deductChargesEntry = new JournalEntry();
         deductChargesEntry.setType(EntryType.DEBIT);
         deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
         deductChargesEntry.setAmount(charges);
         deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
-        deductChargesEntry.setFinancialEvent(chargesForPayment);
-        deductChargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        deductChargesEntry.setEventReference(chargesForPayment.getId());
+        deductChargesEntry.setDescription(payment.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(chargesEntry);
         journalEntries.add(deductChargesEntry);
-
-        String description = "Service charge for Incoming payment from " + payment.getPayer() +
-                " to " + payment.getPayee().getFullName();
-
-        chargesForPayment.setDescription(description);
-        chargesForPayment.setJournalEntries(journalEntries);
+        return journalEntries;
     }
 
     public void generatePaymentMessage(Payment payment) {

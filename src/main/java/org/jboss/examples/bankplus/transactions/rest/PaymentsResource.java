@@ -1,11 +1,13 @@
 package org.jboss.examples.bankplus.transactions.rest;
 
-import org.jboss.examples.bankplus.customer.model.Contact;
-import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.transactions.model.Contact;
+import org.jboss.examples.bankplus.transactions.model.Customer;
 import org.jboss.examples.bankplus.transactions.model.Payment;
 import org.jboss.examples.bankplus.transactions.rest.dto.PaymentDTO;
 import org.jboss.examples.bankplus.transactions.services.PaymentException;
 import org.jboss.examples.bankplus.transactions.services.PaymentService;
+import org.jboss.examples.bankplus.transactions.services.client.Contacts;
+import org.jboss.examples.bankplus.transactions.services.client.Customers;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
@@ -29,16 +31,22 @@ public class PaymentsResource {
     @Inject
     private PaymentService paymentService;
 
+    @Inject
+    private Customers customers;
+
+    @Inject
+    private Contacts contacts;
+
     @POST
     @Consumes("application/json")
     public Response create(PaymentDTO dto) {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
-        Customer from = em.find(Customer.class, customerId);
+        Customer from = customers.findById(customerId);
         Long payeeId = dto.getPayeeId();
         if(payeeId == null) {
             throw new PaymentException("Contact was not specified.");
         }
-        Contact to = em.find(Contact.class, payeeId);
+        Contact to = contacts.findById(payeeId);
         if(to == null) {
             throw new PaymentException("Contact was not specified.");
         }

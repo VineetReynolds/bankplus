@@ -45,6 +45,12 @@ public class Accounts {
         account.setLastUpdatedOn(now);
 
         em.persist(account);
+
+        if(accountId == null) {
+            accountId = String.format("2%019d", account.getId());
+            account.setAccountId(accountId);
+            account = em.merge(account);
+        }
         return account;
     }
 

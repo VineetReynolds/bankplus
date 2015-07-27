@@ -1,11 +1,7 @@
 package org.jboss.examples.bankplus.transactions.model;
 
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
-
 import javax.persistence.*;
 import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
@@ -44,14 +40,4 @@ public class Event {
         this.dateTime = dateTime;
     }
 
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "financialEvent")
-    private Set<JournalEntry> journalEntries = new HashSet<>();
-
-    public Set<JournalEntry> getJournalEntries() {
-        return journalEntries;
-    }
-
-    public void setJournalEntries(Set<JournalEntry> journalEntries) {
-        this.journalEntries = journalEntries;
-    }
 }

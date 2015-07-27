@@ -1,7 +1,6 @@
 package org.jboss.examples.bankplus.accounting.model;
 
 import org.jboss.examples.bankplus.money.model.Money;
-import org.jboss.examples.bankplus.transactions.model.Event;
 
 import javax.persistence.*;
 import java.util.Date;
@@ -76,14 +75,23 @@ public class JournalEntry {
         this.dateTime = dateTime;
     }
 
-    @ManyToOne
-    private Event financialEvent;
+    private Long eventReference;
 
-    public Event getFinancialEvent() {
-        return financialEvent;
+    public Long getEventReference() {
+        return eventReference;
     }
 
-    public void setFinancialEvent(Event financialEvent) {
-        this.financialEvent = financialEvent;
+    public void setEventReference(Long eventReference) {
+        this.eventReference = eventReference;
+    }
+
+    private String description;
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 }
