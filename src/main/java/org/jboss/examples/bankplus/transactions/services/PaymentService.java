@@ -212,14 +212,14 @@ public class PaymentService {
         chargesEntry.setAmount(charges);
         chargesEntry.setDateTime(chargesForPayment.getDateTime());
         chargesEntry.setEventReference(chargesForPayment.getId());
-        chargesEntry.setDescription(payment.getDescription());
+        chargesEntry.setDescription(chargesForPayment.getDescription());
         final JournalEntry deductChargesEntry = new JournalEntry();
         deductChargesEntry.setType(EntryType.DEBIT);
         deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
         deductChargesEntry.setAmount(charges);
         deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
         deductChargesEntry.setEventReference(chargesForPayment.getId());
-        deductChargesEntry.setDescription(payment.getDescription());
+        deductChargesEntry.setDescription(chargesForPayment.getDescription());
         final Set<JournalEntry> journalEntries = new HashSet<>();
         journalEntries.add(chargesEntry);
         journalEntries.add(deductChargesEntry);
