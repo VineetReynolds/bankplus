@@ -15,12 +15,12 @@ import java.util.Set;
 @XmlRootElement
 public class JournalEntryRepresentation implements Serializable {
 
-    private String accountId;
+    private AccountRepresentation account;
     private Money amount;
-    private Long eventReference;
-    private EntryType type;
     private Date dateTime;
+    private Long eventReference;
     private String description;
+    private EntryType type;
 
     public static Set<JournalEntry> from(Set<JournalEntryRepresentation> uploadedJournalEntries, Accounts accounts) {
         Set<JournalEntry> entries = new HashSet<>();
@@ -33,7 +33,7 @@ public class JournalEntryRepresentation implements Serializable {
 
     private static JournalEntry from(JournalEntryRepresentation uploadedJournalEntry, Accounts accounts) {
         JournalEntry journalEntry = new JournalEntry();
-        Account account = accounts.findByAccountId(uploadedJournalEntry.getAccountId());
+        Account account = accounts.findByAccountId(uploadedJournalEntry.getAccount().getAccountReference());
         journalEntry.setAccount(account);
         journalEntry.setAmount(uploadedJournalEntry.getAmount());
         journalEntry.setEventReference(uploadedJournalEntry.getEventReference());
@@ -43,12 +43,12 @@ public class JournalEntryRepresentation implements Serializable {
         return journalEntry;
     }
 
-    public String getAccountId() {
-        return accountId;
+    public AccountRepresentation getAccount() {
+        return account;
     }
 
-    public void setAccountId(String accountId) {
-        this.accountId = accountId;
+    public void setAccount(AccountRepresentation account) {
+        this.account = account;
     }
 
     public Money getAmount() {
@@ -59,12 +59,28 @@ public class JournalEntryRepresentation implements Serializable {
         this.amount = amount;
     }
 
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
     public Long getEventReference() {
         return eventReference;
     }
 
     public void setEventReference(Long eventReference) {
         this.eventReference = eventReference;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public EntryType getType() {
@@ -75,19 +91,5 @@ public class JournalEntryRepresentation implements Serializable {
         this.type = type;
     }
 
-    public Date getDateTime() {
-        return dateTime;
-    }
 
-    public void setDateTime(Date dateTime) {
-        this.dateTime = dateTime;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
 }

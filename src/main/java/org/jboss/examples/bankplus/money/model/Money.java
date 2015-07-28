@@ -1,5 +1,8 @@
 package org.jboss.examples.bankplus.money.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 import javax.persistence.Embeddable;
 import javax.persistence.ManyToOne;
 import javax.validation.constraints.NotNull;
@@ -9,6 +12,8 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.math.BigDecimal;
 
 @Embeddable
+@JsonSerialize(using = JsonMoneySerializer.class)
+@JsonDeserialize(using = JsonMoneyDeserializer.class)
 public class Money {
 
     public Money() {

@@ -37,4 +37,23 @@ public class Currency {
                 "currencyCode='" + currencyCode + '\'' +
                 '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Currency)) return false;
+
+        Currency currency = (Currency) o;
+
+        if (!currencyCode.equals(currency.currencyCode)) return false;
+        return name.equals(currency.name);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = currencyCode.hashCode();
+        result = 31 * result + name.hashCode();
+        return result;
+    }
 }
