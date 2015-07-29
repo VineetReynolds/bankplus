@@ -13,7 +13,7 @@ angular.module('bankPlusApp')
     $scope.statementLines = [];
 
     $scope.generateReport = function() {
-      if($scope.fromDate > $scope.toDate) {
+      if($scope.fromDate && $scope.toDate && ($scope.fromDate > $scope.toDate)) {
         flash.setMessage({'type':'danger','text':'From date cannot be later than To date.'}, true);
         return;
       }
