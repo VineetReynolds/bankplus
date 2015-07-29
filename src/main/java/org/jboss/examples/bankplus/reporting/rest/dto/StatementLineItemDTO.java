@@ -2,9 +2,9 @@ package org.jboss.examples.bankplus.reporting.rest.dto;
 
 import org.jboss.examples.bankplus.accounting.model.EntryType;
 import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.money.model.Money;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.util.Date;
 
 public class StatementLineItemDTO implements Serializable {
@@ -17,9 +17,9 @@ public class StatementLineItemDTO implements Serializable {
 
     private String type;
 
-    private BigDecimal amount;
+    private Money amount;
 
-    private BigDecimal balance;
+    private Money balance;
 
     public StatementLineItemDTO() {
 
@@ -31,7 +31,7 @@ public class StatementLineItemDTO implements Serializable {
             this.dateTime = entity.getDateTime();
             this.description = entity.getDescription();
             this.type = entity.getType() == EntryType.CREDIT ? "Deposit" : "Withdrawal";
-            this.amount = entity.getAmount().getAmount();
+            this.amount = entity.getAmount();
         }
     }
 
@@ -67,19 +67,19 @@ public class StatementLineItemDTO implements Serializable {
         this.type = type;
     }
 
-    public BigDecimal getAmount() {
+    public Money getAmount() {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
+    public void setAmount(Money amount) {
         this.amount = amount;
     }
 
-    public BigDecimal getBalance() {
+    public Money getBalance() {
         return balance;
     }
 
-    public void setBalance(BigDecimal balance) {
+    public void setBalance(Money balance) {
         this.balance = balance;
     }
 }

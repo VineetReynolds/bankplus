@@ -80,13 +80,13 @@ public class ReportsResource {
 
         StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
         openingBalanceStatement.setDescription("Opening Balance");
-        BigDecimal runningBalance = openingBalance.getAmount();
+        Money runningBalance = openingBalance;
         openingBalanceStatement.setBalance(runningBalance);
 
         final List<StatementLineItemDTO> results = new ArrayList<>();
         results.add(openingBalanceStatement);
         for (JournalEntry searchResult : searchResults) {
-            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount()) : runningBalance.subtract(searchResult.getAmount());
             StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
             dto.setBalance(runningBalance);
             results.add(dto);
@@ -131,13 +131,13 @@ public class ReportsResource {
 
         StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
         openingBalanceStatement.setDescription("Opening Balance");
-        BigDecimal runningBalance = openingBalance.getAmount();
+        Money runningBalance = openingBalance;
         openingBalanceStatement.setBalance(runningBalance);
 
         final List<StatementLineItemDTO> results = new ArrayList<>();
         results.add(openingBalanceStatement);
         for (JournalEntry searchResult : searchResults) {
-            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount()) : runningBalance.subtract(searchResult.getAmount());
             StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
             dto.setBalance(runningBalance);
             results.add(dto);
@@ -210,12 +210,12 @@ public class ReportsResource {
         if(openDate != null) {
             StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
             openingBalanceStatement.setDescription("Opening Balance");
-            BigDecimal runningBalance = openingBalance.getAmount();
-            openingBalanceStatement.setBalance(runningBalance);
+            Money runningBalance = openingBalance;
+            openingBalanceStatement.setBalance(openingBalance);
             results.add(openingBalanceStatement);
 
             for (JournalEntry searchResult : searchResults) {
-                runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+                runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount()) : runningBalance.subtract(searchResult.getAmount());
                 StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
                 dto.setBalance(runningBalance);
                 results.add(dto);

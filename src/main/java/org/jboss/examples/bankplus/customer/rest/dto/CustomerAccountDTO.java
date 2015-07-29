@@ -1,20 +1,17 @@
 package org.jboss.examples.bankplus.customer.rest.dto;
 
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.persistence.EntityManager;
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.util.Date;
 
 public class CustomerAccountDTO implements Serializable {
 
     private Long accountId;
-
     private String iban;
-
-    private BigDecimal balance;
-
+    private Money balance;
     private Date lastUpdatedOn;
 
     public CustomerAccountDTO() {
@@ -24,7 +21,7 @@ public class CustomerAccountDTO implements Serializable {
         if (entity != null) {
             this.accountId = entity.getId();
             this.iban = entity.getIban();
-            this.balance = entity.getFinancialAccount().getCurrentBalance().getAmount();
+            this.balance = entity.getFinancialAccount().getCurrentBalance();
             this.lastUpdatedOn = entity.getFinancialAccount().getLastUpdatedOn();
         }
     }
@@ -49,11 +46,11 @@ public class CustomerAccountDTO implements Serializable {
         this.iban = iban;
     }
 
-    public BigDecimal getBalance() {
+    public Money getBalance() {
         return balance;
     }
 
-    public void setBalance(BigDecimal balance) {
+    public void setBalance(Money balance) {
         this.balance = balance;
     }
 
