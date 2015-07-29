@@ -15,13 +15,13 @@
       <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
         <td>{{result.dateTime | date : 'medium'}}</td>
         <td>{{result.description}}</td>
-        <td ng-switch-when="Withdrawal">{{result.amount}}</td>
+        <td ng-switch-when="Withdrawal">{{result.amount.amount}}</td>
         <td ng-switch-when="Withdrawal"></td>
         <td ng-switch-when="Deposit"></td>
-        <td ng-switch-when="Deposit">{{result.amount}}</td>
+        <td ng-switch-when="Deposit">{{result.amount.amount}}</td>
         <td ng-switch-default></td>
         <td ng-switch-default></td>
-        <td>{{result.balance}}</td>
+        <td>{{result.balance.amount}}</td>
       </tr>
       </tbody>
     </table>
