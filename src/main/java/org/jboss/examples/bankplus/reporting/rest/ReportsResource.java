@@ -187,8 +187,8 @@ public class ReportsResource {
         final List<JournalEntry> searchResults = findAllQuery.getResultList();
         final List<StatementLineItemDTO> results = new ArrayList<>();
 
-        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
-        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account.accountId = :accountId AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount().getAccountReference());
         accountBalanceHistoryQuery.setParameter("date", from);
 
         Money openingBalance = null;
