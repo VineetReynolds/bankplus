@@ -43,7 +43,6 @@ public class CustomerAccounts {
             throw new CustomerAccountException("Failed to find a parent Liabilities account for the customer account.");
         }
         Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
-        Long id = financialAccount.getDatabaseId();
 
         String iban = new USIban.Builder()
                 .bankCode("PLUS")

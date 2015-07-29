@@ -8,17 +8,6 @@ import javax.persistence.Transient;
 @Embeddable
 public class Account {
 
-    private Long databaseId;
-
-    public Long getDatabaseId() {
-        return databaseId;
-    }
-
-    public void setDatabaseId(Long id) {
-        this.databaseId = id;
-    }
-
-
     private String accountReference;
 
     public String getAccountReference() {

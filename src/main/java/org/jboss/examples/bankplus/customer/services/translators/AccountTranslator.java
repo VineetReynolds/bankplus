@@ -14,7 +14,6 @@ public class AccountTranslator {
         Account account = null;
         if(container != null) {
             account = new Account();
-            account.setDatabaseId(container.getId());
             account.setAccountReference(container.getAccountId());
             account.setCurrentBalance(container.getCurrentBalance());
             account.setLastUpdatedOn(container.getLastUpdatedOn());
