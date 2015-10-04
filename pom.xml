@@ -11,7 +11,7 @@
     <properties>
         <apache.httpcomponents.version>4.3.6</apache.httpcomponents.version>
         <javax.json.api>1.0</javax.json.api>
-        <keycloak.version>1.2.0.Final</keycloak.version>
+        <keycloak.version>1.5.0.Final</keycloak.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>

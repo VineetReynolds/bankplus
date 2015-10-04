@@ -9,6 +9,7 @@ import org.keycloak.connections.httpclient.HttpClientBuilder;
 import org.keycloak.events.Event;
 import org.keycloak.events.EventListenerProvider;
 import org.keycloak.events.EventType;
+import org.keycloak.events.admin.AdminEvent;
 import org.keycloak.models.*;
 import org.keycloak.util.KeycloakUriBuilder;
 
@@ -100,6 +101,12 @@ public class BankplusEventListenerProvider implements EventListenerProvider {
     }
 
     @Override
+    public void onEvent(AdminEvent adminEvent, boolean b) {
+        // Do nothing
+    }
+
+    @Override
     public void close() {
+        // Do nothing
     }
 }
