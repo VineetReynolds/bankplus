@@ -1,0 +1,107 @@
+== Business Architecture
+
+The business architecture outlined here, sets out to describe the service strategy of BankPlus. It describes the functional, organizational and information aspects of the business environment.
+
+TIP: While the tutorial is mostly geared towards software engineers, artifacts like the currently discussed business architecture would be introduced. The aim of such an initiative is to introduce elements produced during the design and development of software systems that engineers may have to utilize to construct software. The business architecture is often the first of such artifacts created. It exists to describe how the enterprise would achieve certain business goals. This tutorial uses some elements from TOGAF, but one could use any suitable framework for documenting the business architecture.
+
+The business architecture describes the relationships that exist between the customers of BankPlus and itself. It also describes the internal processes of BankPlus, and provides an organizational breakdown of the various business units involved in these processes.
+
+=== What is BankPlus?
+
+In this tutorial, we set out to create BankPlus, a fictitious payment bank. A payment bank is a type of niche bank that does not provide full services. It offers a no-frills payment service to it's customers. It can only receive deposits of money and allow customers to make payments to any person or institution with a bank account. It cannot carry out lending activities - i.e. no loans are offered by the bank to it's customers. In a way this is similar to payment services that allow customers to deposit some money with the service in order to make payments later.
+
+BankPlus allows users, namely it's retail customers to register and create accounts in the system. Each customer would be able to make deposits into and order withdrawals from the account, as well as make payments to other accounts. Outgoing payments are not restricted to payments to customers of BankPlus alone; the customers could exist in other banks.
+
+Customers would be able to view statements (reports) of transactions that have occured in their accounts for the current month and for the current year. Customized statements could also be generated if users specify the duration for which the statement should be generated.
+
+In order to support incoming and outgoing payments to other banks, BankPlus interfaces with a clearing bank that operates a clearing network. Payments made from an account to another BankPlus account are handled within BankPlus itself; they are routed internally. Payments to accounts not located in BankPlus are routed to the clearing network where the clearing bank would route and transmit the payment message to another particpating bank in the clearing network. Likewise, payments made from an account in another bank in the network to a BankPlus account would be routed by the clearing bank to BankPlus.
+
+
+=== Functional scenarios
+
+We now proceed to expand on the previous description of BankPlus to outline the various business scenarios this fictitious bank would incorporate. The business scenarios would be outlined in the form of use cases written as behavioral specifications. Each use case is also a single user story, if one were to adopt the agile methodology for software development.
+
+[NOTE]
+====
+As a prospective user of the payment bank, I would be able to register an account with the payment bank.
+====
+
+Every customer account would be associated with an IBAN (International Banking Account Number) at the time of registraion; the IBAN uniquely identifies the customer account throughout the entire banking network. The unique identification in the banking network ensures that any customer in any bank can issue a payment to any other customer in the banking network. BankPlus is just one of the banks in the banking network.
+
+There may be other internal accounts in the BankPlus system, that may not be associated with an IBAN; such accounts may be needed for accounting purposes. We'll describe the accounting model later.
+
+On registering an account with the bank, the initial balance of the account will be 0$. The United States Dollar would be the functional and reporting currency of the bank. All account balances would be reported in dollars. Deposits, withdrawals and payments would also be made with this currency.
+
+Don't worry though - this is a fictitious bank and you would not be required to spend real money to perform transactions here.
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to deposit money into the provided account.
+====
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to withdraw money from the provided account.
+====
+
+Once a user is registered with BankPlus, he/she will be able to deposit and withdraw money from the registered account. Since we don't operate on real world money, deposits and withdrawals are fictitious, and can be performed via a simple user interface. The operations are real only in the sense that they affect the balance of the account. If we were to operate in the real world, we would model deposits and withdrawals as operations that would be recorded and tagged against a physical transaction involving a deposit slip or a withdrawal slip, respectively.
+
+Withdrawals are subject to a positive account balance. Withdrawals cannot place the account into a negative balance; if they do, they are rejected. Partial withdrawals in a failed transaction are not permitted. If the user wishes to withdraw the balance, he/she may retry the transaction with a lower amount.
+
+[NOTE]
+====
+As a registered user, I would be able to add unqiuely identifiable contacts to my contacts database for the purpose of making outgoing transfers.
+====
+
+Every contact is identified by the previously introduced concept of an IBAN. The contacts of a user are not visible to other users for the sake of privacy - every user thus has his/her own 'private' contacts database. As stated previously, the registered IBAN for a user need not be an IBAN within the bank - it could a valid IBAN in another bank in the banking network.
+
+[NOTE]
+====
+As a registered user, I would be able to view all my contacts in the contacts database.
+====
+
+[NOTE]
+====
+As a registered user, I would be able to edit a contact in the contacts database.
+====
+
+Obviously, we want to allow users to view and edit contacts in the contacts database. These user stories are fairly obvious.
+
+
+[NOTE]
+====
+As a registered user, I would be able to transfer money to a contact in denominations of USD to the specified account.
+====
+
+Transfers are subject to having a positive account balance. Outgoing transfers cannot place the account into a negative balance; if they do, they are rejected. Partial transfers in a failed transaction are not permitted. If the user wishes to transfer the remaining balance, he/she may retry the transaction with a lower amount.
+
+[NOTE]
+====
+As a registered user, I would be able to receive money from a contact in denominations of USD to the provided account.
+====
+
+Such contacts may be customers of the same bank, or they may be customers of another bank. Incoming transfers with negative amounts are not permitted. Incoming transfers that do not have a matching IBAN within the bank will be rejected and the money would be returned to the originating customer via the banking network.
+
+We shall not implement the interfaces with the banking network for the purpose of demonstrating incoming transfers from other banks. Instead, we'll simply mimic this through the generation of ficticious incoming payment messages. The payment messages though, would be processed by BankPlus, and would result in increase of the account balance of the receiver.
+
+[NOTE]
+====
+As a registered user, I would be able to obtain accounts statements for the current month, year, or for a specified period.
+====
+
+All account statements generated by BankPlus would contain the opening account balance for the specified period (month, year or custom period). The statement would then note the deposits and withdrawals to the account in addition to modifications to the account balance after every deposit or withdrawal. For the sake of brevity, outgoing payments would be recorded as withdrawals, and incoming payments would be recorded as deposits in the statement. The statement would then indicate the current or closing account balance.
+
+=== Organizational structure
+
+The organizational structure of BankPlus is not visible from the business scenarios. It is possible to organize the operation of the bank across various areas of operation. This would eventually turn out to be important when we discuss microservices.
+
+To begin, users/customers of BankPlus would be serviced by the Customer and Account Information unit. This unit would be responsible for handling customer data and for linking the customer account with the actual financial account managed by the Financial Accounting unit (see later).
+
+Deposits, withdrawals and payments performed by customers would be serviced by the Payments and Clearing unit. This unit is by and large responsible for most handling the operational side of BankPlus. Since the scope of operations is limited for now, all transactions would be serviced by a single unit. As and when the scope of operations increase in volume, complexity, or both, additional units may need to be created. This unit would also assume responsibility for processing financial payment messages - both the incoming and outgoing types.
+
+Accounting would be serviced by the Financial Accounting unit. This unit would be segregated from the operational side of business and would serve to manage the financial accounts of the business including that of the customers. The operations side would submit a series of accounting entries to be registered in the accounts of the business; a firewall of sorts exists between the operational side and the financial accounting side to prevent operations from . A Risk management or Compliance unit would also be present as a sibling of this unit, and it would assume the responsibility of verifying and auditing the accounts of the business. But for the purposes of keeping the tutorial short, we shall not cover the business use cases relevant to that unit, and neither shall we implement any such functionality.
+
+
+== Enterprise Application architecture
+
+The application uses Java EE 7 services to provide business logic and persistence, utilizing technologies such as CDI, EJB, JAX-RS and JPA. These services back the user-facing front-end, which is implemented using HTML5 and AngularJS. KeyCloak would be used to secure the backend services against OAuth clients (the front-end).

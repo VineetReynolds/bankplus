@@ -1,7 +1,7 @@
 package org.jboss.examples.bankplus.reporting.rest.dto;
 
 import org.jboss.examples.bankplus.accounting.model.EntryType;
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.reporting.model.JournalEntry;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import java.io.Serializable;

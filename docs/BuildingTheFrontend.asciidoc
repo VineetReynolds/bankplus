@@ -1,0 +1,1794 @@
+Now that we have the business use cases ready, let us proceed to mock up the front-end for those use cases. We'll use http://yeoman.io/[Yeoman] to quickly scaffold up the front-end and then modify the generated code to implement the required functionality.
+
+Let's proceed to do this for every business use case outlined earlier in the chapter outlining the Business Architecture.
+
+== Setting up the application
+
+Let's bootstrap development by starting a new project using Yeoman.
+
+First install `yo` and the required tools:
+
+----
+npm install -g yo bower grunt-cli gulp
+----
+
+`npm` is the package manager for Node.js, so you'll need to install Node.js before hand.
+
+Once you have installed Yeoman, install the Yeoman AngularJS generator
+
+----
+npm install -g generator-angular
+----
+
+One can now setup the project and scaffold the app:
+
+----
+yo angular BankPlus
+----
+
+When asked, add Bootstrap (without Sass and Compass) and the default AngularJS modules. Once the command has completed execution, you should now find a project created in the current directory, with the following files and sub-directories:
+
+----
+bower_components
+node_modules
+package.json
+test
+app
+bower.json
+Gruntfile.js
+README.md
+----
+
+Let's take a look at some of them:
+
+* `app` contains the project source files for the front-end. This is where we'll create new artifacts for our features.
+* `test` contains the JavaScript-based unit tests for testing the sources present in the `app` directory. Additional tests would be added here.
+* `bower.json` contains entries indicating which Bower components will be used in the front-end project. For now, it contains entries for AngularJS and BootStrap - the two components we will use in our application. We may declare a few additional dependencies to this file, as and when we need them.
+* `bower_components` includes the artifacts for the dependencies that are declared in `bower.json`.
+* `Gruntfile.js` contains the Grunt.js project task configurations for the application. One can now run various tasks like `grunt serve` - to preview the app in a brower with LiveReload, `grunt test` to run unit tests, and `grunt` to produce an optimized production-ready version of the app.
+* `package.json` lists the various Node.js modules required by the tooling for this project. This is project-specific tooling like the ones required for Grunt tasks used in `Gruntfile.js`, unlike the `yo`, `bower` and `grunt-cli` Node.js modules that were installed globally.
+* `node_modules` contains the Node.js modules listed in `package.json`.
+
+Let's attempt to run the application and see how various files are wired up. To launch the application, run the `grunt serve` task. This task performs the necessary steps to launch a HTTP web server from where the project source files and dependencies would be hosted. A web browser would also be launched with `http://localhost:9000` as the launch URL; the port 9000 happens to be the listen port of the previously mentioned Node.js based web server. LiveReload support would be enabled such that any changes to the project files would be automatically reflected in the web browser, allowing for a rapid front-end development cycle.
+
+The application launched by the `grunt serve` task displays the home page of the application. For now the application is a static one, with 3 pages or views - the Home page, the Contact page and the About page. We'll eventually replace the contents of the home page, and also remove the Contact and About pages while adding the required views.
+
+The front-end is currently implemented as a Single Page Application (SPA) using AngularJS and BootStrap. For those new to the concept of SPAs, the entire application has just one HTML file containing the application-wide layout, and more importantly, housing a container element where an individual view will be displayed. Any interaction in the app will not result in a navigation to a new page; instead a new view will be displayed in the container element and the existing view would be removed. This makes for flicker-free navigation as the browser does not have to download and wait for a new page to be rendered. Such apps are heavy on JavaScript as they involve manipulation of the DOM. The single HTML page in the SPA will also embed the required JavaScript dependencies required by the rest of the application.
+
+The `app/index.html` file is the page launched by the browser; the same page also happens to be the page implementing the SPA. It contains the application layout in the form of a BootStrap navbar and a `div` container for the AngularJS views. When the user navigates to a different view, the content of the div is swapped out and replaced with the contents of another view.
+
+The views are wired to various URLs used by the application structure, through the `$routeProvider` configuration performed in the `bankPlusApp` module. The configuration itself is performed in the `app/scripts/app.js` file which is loaded by the `app/index.html` file. Thus, when the browser loads and renders the `index.html` page, it ends up wiring the `/` and `/about` URLs to the `views/main.html` and `views/about.html` views. In other words, on navigating to the `/` URL, the content of `views/main.html` would be added to the container element in the SPA, and on navigating to the `/home` URL the content of the `views/about.html` would be added to the same element, replacing the existing contents.
+
+The wiring of the URLs to the views also involves AngularJS controllers - currently these are `MainCtrl` and `AboutCtrl` defined in `app/scripts/controllers/main.js` and `app/scripts/controllers/about.js`. For now, both of these controllers do not have any useful logic as the views are static and hence do not require any invocation of backend services, or updates to JavaScript variables based on events triggered by user input etc. We'll eventually add views with controllers that are more sophisticated in nature.
+
+
+=== User Authentication and Registration
+
+Let's now move to implement the first story of the application.
+
+[NOTE]
+====
+As a prospective user of the payment bank, I would be able to register an account with the payment bank.
+====
+
+Unlike most of the other stories in this application, this business scenario and a few related one can be implemented through the use of http://keycloak.jboss.org/[KeyCloak], instead of writing a HTML based front-end. At best, we may modify the theme utilized by KeyCloak for the application, but we'll avoid writing new screens for login and user-registration; KeyCloak provides this out of the box. We'll utilize KeyCloak both for the SSO and IDM capabilties as indicated in the enterprise architecture.
+
+==== Setting up KeyCloak
+
+Download the KeyCloak distribution and extract it to a directory.
+
+Start KeyCloak by declaring the `JBOSS_HOME` environment variable, and then execute the `bin/standalone` script in the extracted directory:
+
+On Linux/Mac:
+
+----
+cd <KEYCLOAK_DIRECTORY>
+export JBOSS_HOME=`pwd`
+./bin/standalone.sh
+----
+
+On Windows:
+
+----
+cd <KEYCLOAK_DIRECTORY>
+set JBOSS_HOME=<KEYCLOAK_DIRECTORY>
+./bin/standalone.cmd
+----
+
+You can now access KeyCloak at http://localhost:8080
+
+==== Creating a KeyCloak realm
+
+Visit the administration console of KeyCloak. The initial username and password to use during login is `admin` and `admin`. You will be prompted to change this on initial login.
+
+Once inside the administration console, we'll set up a KeyCloak realm for the BankPlus application. Specify the name of the realm as `BankPlus`.
+
+[NOTE]
+====
+A KeyCloak realm contains security metadata and is a unit within KeyCloak for a set of users, applications and OAuth clients.
+====
+
+Configure the realm to
+
+* allow user registration
+* use email as username
+* and enable the 'remember me' functionality
+
+==== Creating a KeyCloak client
+
+Once the realm is setup, we need to create a KeyCloak client representing the users on web browser that would access the application.
+
+* Create a new client by visiting the `Clients` tab:
+* Click the `Create` button to begin creating a new client.
+* Specify the `Client ID` as `BankPlus` and the name also as `BankPlus`.
+* Specify the `Access Type` as `public`. This ensures web-browser based clients can utilize this client configuration.
+* Specify the value for `Valid Redirect URIs` as `http://localhost:9000/*`. For now, we'll utilize the URI where the Grunt server would host the application. For production use, we'll modify this value to reflect the production URI.
+* Save the client.
+* The `Web Origins` should now have one entry - `http://localhost:9000`.
+* Set the `Base URL` as `http://localhost:9000`.
+
+Once the client has been created, let's generate the `keycloak.json` file that will be utlized by the AngularJS app. Visit the `Installation` tab and select the `KeyCloak JSON` option from the `Format Option` dropdown. Download and save the `keycloak.json` file in the `app` directory of the application. The content should be similar to the following, except for the public key :
+
+.app/keycloak.json
+[source,javascript]
+----
+{
+  "realm": "BankPlus",
+  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApvDnVY+76T/1uEYMabMrrplHxIXa8pbgWkjFBKU+FoQwE5uVxR8mWu/eWke6W9O+ndDnMRrPDV7vGiYkPd1hKZMBVOrH83ZrFvw1GbOBiWVdpSjOw7ZnRq+9qX1qBV+2+ii1OnXB85cxtvItf3MCklycjrhaecrLiTUh/+T2B17E/a6u5S4KkKSqBjIPY9H6L5NTC1llDvCCy+qq8v0qAgJMXbdL7Z2lEatjxtdhdpm4uPAscR3QOlHuqocuFGL2mHjP5PhBnEdouGtCTZPM5TK3+8NlXqzM83a+V7wxCYtHHrRZJZDkloY3BXS2XWkBk1Qt951UYcHOZ19tyR8fwwIDAQAB",
+  "auth-server-url": "http://localhost:8080/auth",
+  "ssl-required": "external",
+  "resource": "BankPlus",
+  "public-client": true
+}
+----
+
+The security metadata contained within, will be utilized by the KeyCloak API (when eventually used in the JavaScript front-end), to redirect users to the KeyCloak login page for authentication. In this process an OAuth token would be received by the client, that would be re-sent on every request to the server, to identify the authenticated user.
+
+==== Integrating KeyCloak with the front-end
+
+Now that a KeyCloak realm and client has been created, let us integrate the required functionality in the front-end to allow users to authenticate with KeyCloak on initial access to the application.
+
+Let's first add the KeyCloak JavaScript adapter as a dependency to the front-end:
+
+----
+$ bower install --save keycloak
+----
+
+Now let's modify the `app.js` file to create a new KeyCloak object during bootstrap. Due to the way the KeyCloak API is written, it needs to be initialized before AngularJS itself bootstrap the application:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+var auth = {};
+
+....
+angular.element(document).ready(function ($http) {
+  var keycloakAuth = new Keycloak('keycloak.json');
+  auth.loggedIn = false;
+
+  keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
+    auth.loggedIn = true;
+    auth.authz = keycloakAuth;
+    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/BankPlus/tokens/logout?redirect_uri=http://localhost:9000/";
+
+    var initInjector = angular.injector(["ng"]);
+    var $http = initInjector.get("$http");
+    var $q = initInjector.get("$q");
+
+    updateToken().then(fetchCustomer().finally(bootstrapApplication));
+    
+  }).error(function () {
+    window.location.reload();
+  });
+
+});
+----
+
+In the above snippet of code added to the `app.js` file, we listen for the `ready` event on the `document` before initializing an object of the `KeyCloak` API. We specify the location of the `keycloak.json` file previously created for the client, as:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+
+var keycloakAuth = new Keycloak('keycloak.json');
+
+....
+----
+
+Then we invoke the `init` function, with the `login-required` argument. This argument instructs KeyCloak to redirect the browser to the login form on the server:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+
+keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
+    ...
+}).error(function () {
+    ...
+});
+....
+----
+
+As a result, the user would be re-directed to the login form on the KeyCloak server when launching the application. Once the credentials are verified, we'll want to store the token on the client. Any such logic should be added in the `success` callback function. The `error` callback function is invoked when authentication fails:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+
+angular.element(document).ready(function ($http) {
+  var keycloakAuth = new Keycloak('keycloak.json');
+  auth.loggedIn = false;
+
+  keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
+    auth.loggedIn = true;
+    auth.authz = keycloakAuth;
+    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/BankPlus/tokens/logout?redirect_uri=http://localhost:9000/";
+
+    var initInjector = angular.injector(["ng"]);
+    var $http = initInjector.get("$http");
+    var $q = initInjector.get("$q");
+
+    updateToken().then(fetchCustomer().finally(bootstrapApplication));
+    
+  }).error(function () {
+    window.location.reload();
+  });
+
+});
+----
+
+In the `success` callback, we store the state of authentication in the `auth` global object. This contains the `loggedIn` attribute indicating whether the user is currently logged in or not, and the `authz` attribute storing a reference to the `KeyCloak` object. The `logoutUrl` attribute stores the URL to which the browser should be redirected to, when the user requests a logout. This will logout the SSO session in the browser.
+
+We also need to perform a few post login actions. First, we need to update the token - `updateToken`, then we need to fetch the details of the logged in customer for display - `fetchCustomer`, and finally we need to instruct AngularJS to proceed with bootstrapping the rest of the application - `bootstrapApplication`.
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+var auth = {};
+var logout = function(){
+  console.log('*** LOGOUT');
+  auth.loggedIn = false;
+  auth.authz = null;
+  window.location = auth.logoutUrl;
+};
+
+....
+
+angular.element(document).ready(function ($http) {
+  var keycloakAuth = new Keycloak('keycloak.json');
+  auth.loggedIn = false;
+
+  keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
+    auth.loggedIn = true;
+    auth.authz = keycloakAuth;
+    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/BankPlus/tokens/logout?redirect_uri=http://localhost:9000/";
+
+    var initInjector = angular.injector(["ng"]);
+    var $http = initInjector.get("$http");
+    var $q = initInjector.get("$q");
+
+    updateToken().then(fetchCustomer().finally(bootstrapApplication));
+
+    function updateToken() {
+      return $q(function(resolve, reject){
+        keycloakAuth.updateToken(10)
+          .success(function() {
+            resolve();
+          })
+          .error(function() {
+            reject('Failed to update the token');
+          });
+      });
+    }
+
+    function fetchCustomer() {
+      var req = {
+        method: 'GET',
+        url: "./bankplus/rest/customers?email=" + auth.authz.idTokenParsed.email,
+        headers: {
+          'Authorization': 'Bearer ' + auth.authz.token,
+          'Accept': 'application/json'
+        }
+      };
+
+      return $q(function(resolve, reject){
+        $http(req).then(function(response) {
+          if (response.data.length == 0) {
+            // No matching customer record was found in BankPlus
+            console.log("Failed to locate customer in the backend.");
+            logout();
+            reject();
+            return;
+          } else {
+            auth.customer = response.data[0];
+          }
+          resolve();
+        }, function(errorResponse) {
+          console.log("Error verifying customer data record..");
+          reject();
+        });
+      });
+    }
+
+    function bootstrapApplication() {
+      angular.bootstrap(document, ['bankPlusApp']);
+    }
+  }).error(function () {
+    window.location.reload();
+  });
+
+});
+----
+
+The `updateToken` function invokes the `updateToken` function of the KeyCloak API to update the token. The promise is resolved when the token is updated; if not, the promise is rejected and the subsequent functions in the sequence are not executed.
+
+The `fetchCustomer` invokes the REST API of BankPlus with the e-mail address of the customer, in order to fetch the details of the just authenticated customer. We don't have a functioning backend yet. We cannot be switching contexts to create a backend now - that is hardly productive, and neither is it something that a front-end development team would worry about. So, we'll mock up a backend to create the contract for the REST API; we'll eventually replace the mocked up backend with the real one once we create it. Also note the addition of the `logout` function - this is invoked when the customer does not exist in the backend, and it's purpose is to redirect the browser to the previously mentioned `logoutUrl` that invalidates the SSO session.
+
+The `bootstrapApplication` function instructs AngularJS to finally begin the bootstrap process for the `bankPlusApp` AngularJS module.
+
+We'll also add a AngularJS factory named `Auth` to access the KeyCloak object with it's access token, a HTTP interceptor named `authInterceptor` implementing the `request` function to intercept HTTP requests and refresh the KeyCloak token, a HTTP interceptor named `errorInterceptor` implementing the `responseError` function to intercept errored-out responses from the backend and take actions like invalidating the SSO session or logging messages to the console indicating failures :
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  
+  ...
+  
+  .factory('Auth', function () {
+    return auth;
+  })
+  .factory('authInterceptor', function ($q, Auth) {
+    return {
+      'request': function (config) {
+        var deferred = $q.defer();
+        if (Auth.authz && Auth.authz.token) {
+          Auth.authz.updateToken(5).success(function () {
+            config.headers = config.headers || {};
+            config.headers.Authorization = 'Bearer ' + Auth.authz.token;
+
+            deferred.resolve(config);
+          }).error(function () {
+            Auth.authz.clearToken();
+            deferred.reject('Failed to refresh token');
+          });
+        }
+        return deferred.promise;
+      }
+    };
+  })
+  .factory('errorInterceptor', function ($q) {
+    return {
+      'responseError': function (rejection) {
+        if (rejection.status == 401) {
+          console.log('session timeout?');
+          logout();
+        } else if (rejection.status == 403) {
+          console.log("Forbidden");
+        } else if (rejection.status == 404) {
+          console.log("Not found");
+        } else if (rejection.status) {
+          if (rejection.data && rejection.data.errorMessage) {
+            console.log(rejection.data.errorMessage);
+          } else {
+            console.log("An unexpected server error has occurred");
+          }
+        }
+        return $q.reject(rejection);
+      }
+    };
+  })
+  .config(function ($httpProvider) {
+    $httpProvider.interceptors.push('errorInterceptor');
+    $httpProvider.interceptors.push('authInterceptor');
+  });
+....
+----
+
+
+Let's see what the complete `app.js` file looks like:
+
+.app/scripts/app.js
+[source,javascript]
+----
+'use strict';
+
+var module = angular.module('bankPlusApp', []);
+
+var auth = {};
+var logout = function(){
+  console.log('*** LOGOUT');
+  auth.loggedIn = false;
+  auth.authz = null;
+  window.location = auth.logoutUrl;
+};
+
+/**
+ * @ngdoc overview
+ * @name bankPlusApp
+ * @description
+ * # bankPlusApp
+ *
+ * Main module of the application.
+ */
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(function ($routeProvider) {
+    $routeProvider
+      .when('/', {
+        templateUrl: 'views/main.html',
+        controller: 'MainCtrl',
+        controllerAs: 'main'
+      })
+      .when('/about', {
+        templateUrl: 'views/about.html',
+        controller: 'AboutCtrl',
+        controllerAs: 'about'
+      })
+      .otherwise({
+        redirectTo: '/'
+      });
+  })
+  .factory('Auth', function () {
+    return auth;
+  })
+  .factory('authInterceptor', function ($q, Auth) {
+    return {
+      'request': function (config) {
+        var deferred = $q.defer();
+        if (Auth.authz && Auth.authz.token) {
+          Auth.authz.updateToken(5).success(function () {
+            config.headers = config.headers || {};
+            config.headers.Authorization = 'Bearer ' + Auth.authz.token;
+
+            deferred.resolve(config);
+          }).error(function () {
+            Auth.authz.clearToken();
+            deferred.reject('Failed to refresh token');
+          });
+        }
+        return deferred.promise;
+      }
+    };
+  })
+  .factory('errorInterceptor', function ($q) {
+    return {
+      'responseError': function (rejection) {
+        if (rejection.status == 401) {
+          console.log('session timeout?');
+          logout();
+        } else if (rejection.status == 403) {
+          console.log("Forbidden");
+        } else if (rejection.status == 404) {
+          console.log("Not found");
+        } else if (rejection.status) {
+          if (rejection.data && rejection.data.errorMessage) {
+            console.log(rejection.data.errorMessage);
+          } else {
+            console.log("An unexpected server error has occurred");
+          }
+        }
+        return $q.reject(rejection);
+      }
+    };
+  })
+  .config(function ($httpProvider) {
+    $httpProvider.interceptors.push('errorInterceptor');
+    $httpProvider.interceptors.push('authInterceptor');
+  });
+
+angular.element(document).ready(function ($http) {
+  var keycloakAuth = new Keycloak('keycloak.json');
+  auth.loggedIn = false;
+
+  keycloakAuth.init({ onLoad: 'login-required' }).success(function () {
+    auth.loggedIn = true;
+    auth.authz = keycloakAuth;
+    auth.logoutUrl = keycloakAuth.authServerUrl + "/realms/BankPlus/tokens/logout?redirect_uri=http://localhost:9000/";
+
+    var initInjector = angular.injector(["ng"]);
+    var $http = initInjector.get("$http");
+    var $q = initInjector.get("$q");
+
+    updateToken().then(fetchCustomer().finally(bootstrapApplication));
+
+    function updateToken() {
+      return $q(function(resolve, reject){
+        keycloakAuth.updateToken(10)
+          .success(function() {
+            resolve();
+          })
+          .error(function() {
+            reject('Failed to update the token');
+          });
+      });
+    }
+
+    function fetchCustomer() {
+      var req = {
+        method: 'GET',
+        url: "./bankplus/rest/customers?email=" + auth.authz.idTokenParsed.email,
+        headers: {
+          'Authorization': 'Bearer ' + auth.authz.token,
+          'Accept': 'application/json'
+        }
+      };
+
+      return $q(function(resolve, reject){
+        $http(req).then(function(response) {
+          if (response.data.length == 0) {
+            // No matching customer record was found in BankPlus
+            console.log("Failed to locate customer in the backend.");
+            logout();
+            reject();
+            return;
+          } else {
+            auth.customer = response.data[0];
+          }
+          resolve();
+        }, function(errorResponse) {
+          console.log("Error verifying customer data record..");
+          reject();
+        });
+      });
+    }
+
+    function bootstrapApplication() {
+      angular.bootstrap(document, ['bankPlusApp']);
+    }
+  }).error(function () {
+    window.location.reload();
+  });
+
+});
+----
+
+We are manually starting up our AngularJS application using `angular.bootstrap`. Care must be taken to ensure we don't bootstrap AngularJS using the usual way - using the `ng-app` directive. The Yeoman generator would have embedded such a directive in `index.html`:
+
+.app/index.html
+[source,html]
+----
+...
+</head>
+<body ng-app="bankPlusApp">
+
+...
+----
+
+Let's go ahead and remove it:
+
+.app/index.html
+[source,html]
+----
+...
+</head>
+<body>
+
+...
+----
+
+[WARNING]
+====
+When bootstrapping AngularJS, the manual and the automatic approaches must not be mixed, or the initial view would show up empty. Of course, other views show up just fine on navigation, but this makes for somewhat strange behavior and requires debugging the bootstrap process.
+====
+
+We're now completed implmention of the feature to register and authenticate users using KeyCloak. On logging into BankPlus, if a user is not registered, he/she can visit the registration screen to create a new user to access the application.
+
+=== The dashboard
+
+On logging into the application, the user is taken to a dashboard where his current account details are displayed. Additionally, links to other supported actions are also displayed.
+
+Let's modify the AngularJS route configuration to set the `templateUrl` as `views/dashboard.html` for the `/` route, and also setup `DashboardCtrl` as the controller wired to the route:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      .when('/', {
+        templateUrl: 'views/dashboard.html',
+        controller: 'DashboardCtrl'
+      })
+
+....      
+----
+
+Create the corresponding AngularJS partial `views/dashboard.html` as :
+
+.app/views/dashboard.html
+[source,html]
+----
+<div class="container">
+    <div class="row clearfix">
+        <div class="col-md-12 column">
+            <h3>
+                Balance: $ {{account.balance.amount}}
+            </h3>
+            <ul class="list-unstyled">
+                <li>
+                    {{account.iban}}
+                </li>
+                <li>
+                  as of {{account.lastUpdatedOn | date:'medium'}}
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="row clearfix">
+        <div class="col-md-12 column">
+            <h3>
+                Contacts
+            </h3>
+            <div class="row clearfix">
+                <div class="col-md-4 column">
+                    <a href="#/contacts/new" class="btn" type="button">Add a contact</a>
+                </div>
+                <div class="col-md-4 column">
+                    <a href="#/contacts/view" class="btn" type="button">View contacts</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-12 column">
+            <h3>
+                Transactions
+            </h3>
+            <div class="row clearfix">
+                <div class="col-md-4 column">
+                    <a href="#/transactions/deposits/new" class="btn" type="button">Deposit funds</a>
+                </div>
+                <div class="col-md-4 column">
+                    <a href="#/transactions/withdrawals/new" class="btn" type="button">Withdraw funds</a>
+                </div>
+                <div class="col-md-4 column">
+                    <a href="#/transactions/payments/new" class="btn" type="button">Pay a contact</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-12 column">
+            <h3>
+                Statements
+            </h3>
+            <div class="row clearfix">
+                <div class="col-md-4 column">
+                    <a href="#/reports/monthly" class="btn" type="button">Current month</a>
+                </div>
+                <div class="col-md-4 column">
+                    <a href="#/reports/yearly" class="btn" type="button">Current year</a>
+                </div>
+                <div class="col-md-4 column">
+                    <a href="#/reports/custom" class="btn" type="button">Customized report</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+----
+
+And create the corresponding AngularJS controller as:
+
+.app/scripts/controllers/dashboard.js
+[source.javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:DashboardCtrl
+ * @description
+ * # DashboardCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('DashboardCtrl', ['$scope', 'customerResource', function ($scope, customerResource) {
+    customerResource.query({'customerId':auth.customer.id}, function(response){
+      $scope.account = response.account;
+    });
+  }]);
+----
+
+The controller depends on an AngularJS resource `customerResource` to query for a customer matching the Id of the `customer` attribute present in the KeyCloak object. If you look at the bootstrap process we just finished writing up, the `customer` attribute is set up after querying the backend for the customer details.
+
+The `customerResource` resource is quite simple to write up - it depends on the `ngResource` service to interact with the Customer REST API at `rest/customers`:
+
+.app/scripts/services/customerFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('customerResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId',{customerId:'@id'},{'queryAll':{method:'GET',isArray:true},'query':{method:'GET',isArray:false},'update':{method:'PUT'}});
+    return resource;
+});
+----
+
+Remember to add the newly created JavaScript files to the list of scripts referenced in `index.html`:
+
+.app/index.html
+[source,html]
+----
+....
+    <!-- build:js({.tmp,app}) scripts/scripts.js -->
+    <script src="scripts/app.js"></script>
+    <script src="scripts/services/customerFactory.js"></script>
+    <script src="scripts/controllers/dashboard.js"></script>
+....
+----
+
+=== Creating and Viewing Contacts
+
+Let's now move onto another user story:
+
+[NOTE]
+====
+As a registered user, I would be able to add unqiuely identifiable contacts to my contacts database for the purpose of making outgoing transfers.
+====
+
+Let's add a new AngularJS route configuration to set the `templateUrl` as `views/contacts/new.html` for the `/contacts/new` route, and also setup `ContactsRegisterCtrl` as the controller wired to the route:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      ...
+      .when('/contacts/new', {
+        templateUrl: 'views/contacts/new.html',
+        controller: 'ContactsRegisterCtrl'
+      })
+
+....      
+----
+
+Create the corresponding AngularJS partial `views/contacts/new.html` as :
+
+.app/views/contacts/new.html
+[source,html]
+----
+<form name="newContactForm" class="form-horizontal" novalidate ng-submit="newContactForm.$valid && registerContact()">
+    <fieldset>
+
+        <legend>Register a contact</legend>
+
+        <!-- Full name-->
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="contactname">Name</label>
+            <div class="col-md-4">
+                <input id="contactname" name="contactname" type="text" placeholder="e.g. John Doe" class="form-control input-md" ng-model="contact.name" required="">
+                <span class="help-block">Full name of your contact</span>
+            </div>
+        </div>
+
+        <!-- IBAN-->
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="iban">IBAN</label>
+            <div class="col-md-4">
+                <input id="iban" name="iban" type="text" placeholder="e.g. BANKPLUS000111" class="form-control input-md" ng-model="contact.iban" required="">
+                <span class="help-block">The IBAN of your contact</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="registercontact"></label>
+            <div class="col-md-8">
+                <input id="registercontact" name="registercontact" class="btn btn-success" type="submit" value="Register Contact" ng-disabled="newContactForm.$invalid" />
+                <input id="reset" name="reset" class="btn btn-default" type="reset" />
+            </div>
+        </div>
+
+    </fieldset>
+</form>
+----
+
+The above view contains a form accepting the full name and IBAN of the contact.
+
+Then, create the corresponding AngularJS controller as:
+
+.app/scripts/controllers/contacts/register.js
+[source.javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ContactsRegisterCtrl
+ * @description
+ * # ContactsRegisterCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ContactsRegisterCtrl', ['$scope', '$location', 'flash', 'contactResource', function ($scope, $location, flash, contactResource) {
+
+    $scope.registerContact = function() {
+      var contactToStore = {'fullName':$scope.contact.name, 'iban':$scope.contact.iban};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'The contact was added successfully.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function() {
+        $scope.displayError = true;
+      };
+      contactResource.save({'customerId':auth.customer.id}, contactToStore, successCallback, errorCallback);
+    };
+
+    $scope.clearUser = function() {
+      $scope.contact = {};
+    };
+  }]);
+----
+
+The controller depends on an AngularJS resource `contactResource` to save the contact details captured in the form, through the `$scope.contact` object. The `contactToStore` variable that is passed to the `contactResource.save` function merely creates a new object from the `$scope.contact` object.
+
+The controller also depends on a `flash` object to display messages to the user. Messages of any type - success, warning or error can be displayed to the user. The messages can be chosen to be displayed in immediately on navigation to a different view (hence the name flash message, borrowed from the Ruby on Rails concept of flash storage), or in the same view.
+
+.app/scripts/services/flash.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc service
+ * @name bankPlusApp.flash
+ * @description
+ * # flash
+ * Factory in the bankPlusApp.
+ */
+angular.module('bankPlusApp')
+  .factory('flash', ['$rootScope', function ($rootScope) {
+    var messages = [];
+    var currentMessage = {};
+
+    $rootScope.$on('$routeChangeSuccess', function() {
+      currentMessage = messages.shift() || {};
+    });
+
+    return {
+      getMessage: function () {
+        return currentMessage;
+      },
+      setMessage: function(message, pop) {
+        messages.push(message);
+        if(pop) {
+          currentMessage = messages.shift() || {};
+        }
+      }
+    };
+  }]);
+----
+
+Let's also modify the `index.html` page to ensure the flash messages are displayed using BootStrap alerts:
+
+.app/index.html
+[source,html]
+----
+...
+    <div class="container" ng-cloak="">
+      <div ng-controller="FlashCtrl" class="alert alert-dismissible" ng-class="'alert-' + flash.getMessage().type" role="alert" ng-show="showAlert">
+        <button type="button" class="close" ng-click="hideAlert()" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        {{flash.getMessage().text}}
+      </div>
+      <div ng-view="">
+      </div>
+    </div>
+...
+
+----
+
+The modification to the page structure ensures that BootStrap style alerts are displayed with the alert's CSS class depending on the type of the message. The message is displayed only when a message is present in the internal array used by the `flash` service. Once a message is 'popped' out of storage, it is made visible, but would not be displayed again after it is dismissed.
+
+The `contactResource` resource is quite simple to write up - it depends on the `ngResource` service to interact with the Customer REST API at `rest/customers`:
+
+.app/scripts/services/contactFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('contactResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/contacts/:contactId',{contactId:'@id'},{'queryAll':{method:'GET',isArray:true},'query':{method:'GET',isArray:false},'update':{method:'PUT'}});
+    return resource;
+});
+----
+
+As always remember to add the newly created JavaScript files to `index.html`.
+
+[NOTE]
+====
+As a registered user, I would be able to view all my contacts in the contacts database.
+====
+
+Let's also add the route for the related story to view all contacts:
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      ...
+      .when('/contacts/view', {
+        templateUrl: 'views/contacts/view.html',
+        controller: 'ContactsViewCtrl'
+      })
+      .when('/contacts/edit/:contactId', {
+        templateUrl: 'views/contacts/edit.html',
+        controller: 'ContactsEditCtrl'
+      })
+
+....      
+----
+
+Create the AngularJS views for viewing all contacts:
+
+.app/views/contacts/view.html
+[source,html]
+----
+<div>
+  <h3>Contacts</h3>
+  <form id="ContactSearch" class="form-horizontal">
+
+    <div class="form-group">
+      <label for="name" class="col-sm-2 control-label">Name</label>
+      <div class="col-sm-10">
+        <input id="name" name="name" class="form-control" type="text" ng-model="search.name" placeholder="Enter the Contact Name or IBAN" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="col-md-offset-2 col-sm-10">
+        <a id="Search" name="Search" class="btn btn-primary" ng-click="performSearch()"><span class="glyphicon glyphicon-search"></span> Search</a>
+      </div>
+    </div>
+  </form>
+</div>
+<div id="search-results">
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Name</th>
+        <th>IBAN</th>
+        <th></th>
+      </tr>
+      </thead>
+      <tbody id="search-results-body">
+      <tr ng-repeat="result in searchResults | filter:search.name">
+        <td>{{result.fullName}}</td>
+        <td>{{result.iban}}</td>
+        <td><a href="#/contacts/edit/{{result.id}}" class="glyphicon glyphicon-edit">Edit</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+----
+
+And create the controller for the view:
+
+.app/scripts/controllers/contacts/view.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ContactsViewCtrl
+ * @description
+ * # ContactsViewCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ContactsViewCtrl', ['$scope','contactResource', function ($scope, contactResource) {
+    $scope.contacts = contactResource.queryAll({'customerId':auth.customer.id});
+
+    $scope.performSearch = function() {
+      $scope.searchResults = $scope.contacts;
+    };
+
+    $scope.performSearch();
+  }]);
+----
+
+The `ContactsViewCtrl` controller is responsible for fetching all contacts for a given customer through the invocation of the `contactResource.queryAll` function using `customerId` as a query parameter.
+
+
+[NOTE]
+====
+As a registered user, I would be able to edit a contact in the contacts database.
+====
+
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      ...
+      .when('/contacts/edit/:contactId', {
+        templateUrl: 'views/contacts/edit.html',
+        controller: 'ContactsEditCtrl'
+      })
+
+....      
+----
+
+The URL template to edit a contact, accepts a parameter for the contact Id. We'll eventually utilize the parameter to load the contact for editing it.
+
+Create the AngularJS views for edit a single contact:
+
+.app/views/contacts/edit.html
+[source,html]
+----
+<form class="form-horizontal">
+  <fieldset>
+
+    <legend>Edit a contact</legend>
+
+    <!-- Full name-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="contactname">Name</label>
+      <div class="col-md-4">
+        <input id="contactname" name="contactname" type="text" placeholder="e.g. John Doe" class="form-control input-md" ng-model="contact.fullName" required="">
+        <span class="help-block">Full name of your contact</span>
+      </div>
+    </div>
+
+    <!-- IBAN-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="iban">IBAN</label>
+      <div class="col-md-4">
+        <input id="iban" name="iban" type="text" placeholder="e.g. BANKPLUS000111" class="form-control input-md" ng-model="contact.iban" required="">
+        <span class="help-block">The IBAN of your contact</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="registercontact"></label>
+      <div class="col-md-8">
+        <button id="registercontact" name="registercontact" class="btn btn-success" ng-click="modifyContact()">Save Contact</button>
+        <button id="reset" name="reset" class="btn btn-default" ng-click="reset()">Reset</button>
+      </div>
+    </div>
+
+  </fieldset>
+</form>
+----
+
+And create the controller for the view:
+
+.app/scripts/controllers/contacts/edit.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ContactsEditCtrl
+ * @description
+ * # ContactsEditCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ContactsEditCtrl', ['$scope', '$location', '$routeParams', 'flash', 'contactResource', function ($scope, $location, $routeParams, flash, contactResource) {
+    $scope.contact = contactResource.get({'customerId':auth.customer.id, 'contactId':$routeParams.contactId}, function() {
+      $scope.originalContact = $scope.contact;
+    });
+
+    $scope.modifyContact = function() {
+      $scope.contact.$update({'customerId':auth.customer.id}, function () {
+        flash.setMessage({'type':'success','text':'The contact was modified successfully.'});
+        $location.path('/customers/dashboard');
+      });
+    };
+
+    $scope.reset = function() {
+      $scope.contact = $scope.originalContact;
+    };
+  }]);
+----
+
+The `ContactsEditCtrl` controller is responsible for fetching a single contact to be edited. As indicated previously, the `contactId` template parameter for the URL is populated with the value of the `contactId` variable resolved in the `$routeParams` object. So, if the user were to visit `/contacts/edit/1`, then the `contactResource.get` method would be invoked with the `contactId` parameter set to 1. Once the updates to the contact are to be saved, the logic within the `modifyContact` function is invoked - the `$update` function provided by the `ngResource` service ensures that a HTTP PUT request is issued to the backend with the updated contact.
+
+=== Deposits, Withdrawals and Payments
+
+Just like the previous use cases, we'll create the required routes, add the necessary views, wire the views to the controllers to implement the required functionality.
+
+Add the required routes to the `routeProvider` configuration of the application :
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      ...
+      .when('/transactions/deposits/new', {
+        templateUrl: 'views/transactions/deposits/new.html',
+        controller: 'TransactionsDepositsNewCtrl'
+      })
+      .when('/transactions/withdrawals/new', {
+        templateUrl: 'views/transactions/withdrawals/new.html',
+        controller: 'TransactionsWithdrawalsNewCtrl'
+      })
+      .when('/transactions/payments/new', {
+        templateUrl: 'views/transactions/payments/new.html',
+        controller: 'TransactionsPaymentsNewCtrl'
+      })
+
+....      
+----
+
+==== Deposits
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to deposit money into the provided account.
+====
+
+Create the view for adding new deposits. This contains a form that would take the amount to be deposited:
+
+.app/views/transactions/deposits/new.html
+[source,html]
+----
+<form name="newDepositForm" class="form-horizontal" novalidate ng-submit="newDepositForm.$valid && makeDeposit()">
+  <fieldset>
+
+    <legend>Make a Deposit</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="deposit.amount" required="">
+        <span class="help-block">Amount to deposit</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makeDeposit"></label>
+      <div class="col-md-8">
+        <input id="makeDeposit" name="makeDeposit" class="btn btn-success" type="submit" value="Deposit" ng-disabled="newDepositForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" value="Reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>
+----
+
+Customers would be free to deposit as much money as they can, as long as the specified amount is positive. This functionality is provided in this form only so that the account balance can be modified to reflect any deposits made by customers. In the real world, such a form would obviously not be provided in the proposed form; instead, this may be a function provided to the teller of the bank, or for that matter, customers would be instructed to deposit money in the form of deposit slips which would be entered as transactions into the system after verification of the deposited amount.
+
+Wire up the controller for the deposits view:
+
+.app/scripts/controllers/transactions/deposits/new.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:TransactionsDepositsNewCtrl
+ * @description
+ * # TransactionsDepositsNewCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('TransactionsDepositsNewCtrl', ['$scope', '$location', 'flash', 'depositResource', function ($scope, $location, flash, depositResource) {
+
+    $scope.makeDeposit = function() {
+      var transactionToStore = {'amount':$scope.deposit.amount};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'Your account has been credited.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function(httpResponse) {
+        flash.setMessage({'type':'danger','text':httpResponse.data.message}, true);
+        $scope.displayError = true;
+      };
+      depositResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);
+    };
+
+    $scope.clear = function() {
+      $scope.deposit = {};
+    };
+  }]);
+----
+
+The controller merely issues requests to the backend and displays any success or error messages depending on the status of the transaction.
+
+And create the `depositResource` definition:
+
+.app/scripts/services/depositFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('depositResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/deposits/:depositId',{depositId:'@id'},{'queryAll':{method:'GET',isArray:true},'query':{method:'GET',isArray:false}});
+    return resource;
+});
+----
+
+==== Withdrawals
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to withdraw money from the provided account.
+====
+
+Likewise, create the view for adding new withdrawals. This contains a form that would take the amount to be withdrawn:
+
+.app/views/transactions/withdrawals/new.html
+[source,html]
+----
+<form name="newWithdrawalForm" class="form-horizontal" novalidate ng-submit="newWithdrawalForm.$valid && makeWithdrawal()">
+  <fieldset>
+
+    <legend>Make a Withdrawal</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="withdrawal.amount" required="">
+        <span class="help-block">Amount to withdraw</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makeWithdrawal"></label>
+      <div class="col-md-8">
+        <input id="makeWithdrawal" name="makeWithdrawal" class="btn btn-success" type="submit" value="Withdraw" ng-disabled="newWithdrawalForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>
+----
+
+Like deposits, customers would be free to withdraw as much money as they can, as long as the specified amount is positive and the balance is not rendered negative after withdrawal. This functionality is provided in this form only so that the account balance can be modified to reflect any withdrawals made by customers. And just like for deposits, in the real world, such a form would obviously not be provided in the proposed form; instead, this may be a function provided to the teller of the bank, or for that matter, customers would be able to withdraw money in the form of cash from an ATM; integrating this functionality with hardware is currently out of the scope of this tutorial.
+
+Wire up the controller for the withdrawals view:
+
+.app/scripts/controllers/transactions/withdrawals/new.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:TransactionsWithdrawalsNewCtrl
+ * @description
+ * # TransactionsWithdrawalsNewCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('TransactionsWithdrawalsNewCtrl', ['$scope', '$location', 'flash', 'withdrawalResource', function ($scope, $location, flash, withdrawalResource) {
+    $scope.makeWithdrawal = function() {
+      var transactionToStore = {'amount':$scope.withdrawal.amount};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'Your account has been debited.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function(httpResponse) {
+        flash.setMessage({'type':'danger','text':httpResponse.data.message}, true);
+        $scope.displayError = true;
+      };
+      withdrawalResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);
+    };
+
+    $scope.clear = function() {
+      $scope.withdrawal = {};
+    };
+  }]);
+----
+
+The controller merely issues requests to the backend and displays any success or error messages depending on the status of the transaction.
+
+And create the `withdrawalResource` definition:
+
+.app/scripts/services/withdrawalFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('withdrawalResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/withdrawals/:withdrawalId',{withdrawalId:'@id'},{'queryAll':{method:'GET',isArray:true},'query':{method:'GET',isArray:false}});
+    return resource;
+});
+----
+
+==== Payments
+
+[NOTE]
+====
+As a registered user, I would be able to transfer money to a contact in denominations of USD to the specified account.
+====
+
+Just like for deposits and withdrawals, we start by creating the view for adding new payments. This contains a form that would take the amount to be paid, as well as a dropdown for choosing the contact to be paid:
+
+.app/views/transactions/payments/new.html
+[source,html]
+----
+<form name="newPaymentForm" class="form-horizontal" novalidate ng-submit="newPaymentForm.$valid && makePayment()">
+  <fieldset>
+
+    <legend>Make a Payment</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="contact">Pay to :</label>
+      <div class="col-md-4">
+        <select id="contact" name="contact" class="form-control input-md" ng-model="payment.contact" ng-options="contact.id as contact.fullName for contact in contactsInStore" required>
+          <option value="">[No contact]</option>
+        </select>
+        <span class="help-block">Contact to pay</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="payment.amount" required="">
+        <span class="help-block">Amount to pay</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makePayment"></label>
+      <div class="col-md-8">
+        <input id="makePayment" name="makePayment" class="btn btn-success" type="submit" value="Make payment" ng-disabled="newPaymentForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" value="Reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>
+----
+
+Customers would be free to pay as much money as they can, as long as the specified amount is positive and the balance is not rendered negative after payment. Unlike deposits and withdrawals, this functionality is very much 'real', in the sense that a real bank would also allow a similar operation.
+
+Wire up the controller for the payments view:
+
+.app/scripts/controllers/transactions/payments/new.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:TransactionsPaymentsNewCtrl
+ * @description
+ * # TransactionsPaymentsNewCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('TransactionsPaymentsNewCtrl', ['$scope', '$location', 'flash', 'contactResource', 'paymentResource', function ($scope, $location, flash, contactResource, paymentResource) {
+    $scope.contactsInStore = contactResource.queryAll({'customerId':auth.customer.id});
+
+    $scope.makePayment = function() {
+      var transactionToStore = {'payeeId':$scope.payment.contact, 'amount':$scope.payment.amount};
+      var successCallback = function(data,responseHeaders){
+        flash.setMessage({'type':'success','text':'Your account has been debited.'});
+        $location.path('/customers/dashboard');
+      };
+      var errorCallback = function(httpResponse) {
+        flash.setMessage({'type':'danger','text':httpResponse.data.message}, true);
+        $scope.displayError = true;
+      };
+      paymentResource.save({'customerId':auth.customer.id}, transactionToStore, successCallback, errorCallback);
+    };
+
+    $scope.clear = function() {
+      $scope.payment = {};
+    };
+  }]);
+----
+
+Like other controllers, this one too merely issues requests to the backend and displays any success or error messages depending on the status of the transaction.
+
+And create the `paymentResource` definition:
+
+.app/scripts/services/paymentFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('paymentResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/payments/:paymentId',{paymentId:'@id'},{'queryAll':{method:'GET',isArray:true},'query':{method:'GET',isArray:false}});
+    return resource;
+});
+----
+
+
+=== Creating Account Statements
+
+[NOTE]
+====
+As a registered user, I would be able to obtain accounts statements for the current month, year, or for a specified period.
+====
+
+Let's move on to the final set of user stories around displaying account statements.
+
+Add the required routes to the `routeProvider` configuration of the application :
+
+.app/scripts/app.js
+[source,javascript]
+----
+....
+angular
+  .module('bankPlusApp', [
+    'ngAnimate',
+    'ngCookies',
+    'ngResource',
+    'ngRoute',
+    'ngSanitize',
+    'ngTouch'
+  ])
+  .config(['$routeProvider', function ($routeProvider) {
+    $routeProvider
+      ...
+      .when('/reports/monthly', {
+        templateUrl: 'views/reports/monthly.html',
+        controller: 'ReportsMonthlyCtrl'
+      })
+      .when('/reports/yearly', {
+        templateUrl: 'views/reports/yearly.html',
+        controller: 'ReportsYearlyCtrl'
+      })
+      .when('/reports/custom', {
+        templateUrl: 'views/reports/custom.html',
+        controller: 'ReportsCustomCtrl'
+      })
+
+....      
+----
+
+
+==== Monthly account statements
+
+Create the view for adding new deposits. This contains a form that would take the amount to be deposited:
+
+.app/views/reports/monthly.html
+[source,html]
+----
+<div>
+  <h3>Monthly statement</h3>
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Withdrawals</th>
+        <th>Deposits</th>
+        <th>Balance</th>
+      </tr>
+      </thead>
+      <tbody id="results-body">
+      <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
+        <td>{{result.dateTime | date : 'medium'}}</td>
+        <td>{{result.description}}</td>
+        <td ng-switch-when="Withdrawal">{{result.amount.amount}}</td>
+        <td ng-switch-when="Withdrawal"></td>
+        <td ng-switch-when="Deposit"></td>
+        <td ng-switch-when="Deposit">{{result.amount.amount}}</td>
+        <td ng-switch-default></td>
+        <td ng-switch-default></td>
+        <td>{{result.balance.amount}}</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <dir-pagination-controls boundary-links="true"></dir-pagination-controls>
+</div>
+----
+
+Wire up the controller for the monthly report view:
+
+.app/scripts/controllers/reports/monthly.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ReportsMonthlyCtrl
+ * @description
+ * # ReportsMonthlyCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ReportsMonthlyCtrl', ['$scope', 'monthlyStatementResource', function ($scope, monthlyStatementResource) {
+    $scope.currentPage =1;
+    $scope.statementLines = monthlyStatementResource.queryAll({'customerId':auth.customer.id});
+  }]);
+----
+
+The controller merely issues requests to the backend and displays any success or error messages depending on the status of the transaction.
+
+And create the `monthlyStatementResource` definition:
+
+.app/scripts/services/monthlyStatementFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('monthlyStatementResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/reports/monthly',null,{'queryAll':{method:'GET',isArray:true}});
+    return resource;
+});
+----
+
+==== Yearly account statements
+
+
+Create the view for viewing yearly statements:
+
+.app/views/reports/yearly.html
+[source,html]
+----
+<div>
+  <h3>Yearly statement</h3>
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Withdrawals</th>
+        <th>Deposits</th>
+        <th>Balance</th>
+      </tr>
+      </thead>
+      <tbody id="results-body">
+      <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
+        <td>{{result.dateTime | date : 'medium'}}</td>
+        <td>{{result.description}}</td>
+        <td ng-switch-when="Withdrawal">{{result.amount.amount}}</td>
+        <td ng-switch-when="Withdrawal"></td>
+        <td ng-switch-when="Deposit"></td>
+        <td ng-switch-when="Deposit">{{result.amount.amount}}</td>
+        <td ng-switch-default></td>
+        <td ng-switch-default></td>
+        <td>{{result.balance.amount}}</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <dir-pagination-controls boundary-links="true"></dir-pagination-controls>
+</div>
+----
+
+Wire up the controller for the view:
+
+.app/scripts/controllers/reports/yearly.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ReportsYearlyCtrl
+ * @description
+ * # ReportsYearlyCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ReportsYearlyCtrl', ['$scope', 'yearlyStatementResource', function ($scope, yearlyStatementResource) {
+    $scope.currentPage =1;
+    $scope.statementLines = yearlyStatementResource.queryAll({'customerId':auth.customer.id});
+  }]);
+----
+
+The controller merely issues requests to the backend and displays any success or error messages depending on the status of the transaction.
+
+And create the `yearlyStatementResource` definition:
+
+.app/scripts/services/yearlyStatementFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('yearlyStatementResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/reports/yearly',null,{'queryAll':{method:'GET',isArray:true}});
+    return resource;
+});
+----
+
+==== Custom range account statements
+
+Create the view for generating statements for custom date ranges:
+
+.app/views/reports/custom.html
+[source,html]
+----
+<div>
+  <h3>Custom statement</h3>
+  <form class="form-horizontal">
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="fromDate">From</label>
+      <div class="col-md-4">
+        <div class="input-group">
+          <input id="fromDate" name="fromDate" type="text" class="form-control" datepicker-popup="dd-MMMM-yyyy" is-open="fromOpened" datepicker-options="dateOptions" ng-model="fromDate" close-text="Close">
+          <span class="input-group-btn">
+            <button type="button" class="btn btn-default" ng-click="open($event, 'from')"><i class="glyphicon glyphicon-calendar"></i></button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="toDate">To</label>
+      <div class="col-md-4">
+        <div class="input-group">
+          <input id="toDate" name="toDate" type="text" class="form-control" datepicker-popup="dd-MMMM-yyyy" is-open="toOpened" datepicker-options="dateOptions" ng-model="toDate" close-text="Close">
+          <span class="input-group-btn">
+            <button type="button" class="btn btn-default" ng-click="open($event, 'to')"><i class="glyphicon glyphicon-calendar"></i></button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="generateReport"></label>
+      <div class="col-md-8">
+        <button id="generateReport" name="generateReport" class="btn btn-success" ng-click="generateReport()">Generate Report</button>
+      </div>
+    </div>
+  </form>
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Withdrawals</th>
+        <th>Deposits</th>
+        <th>Balance</th>
+      </tr>
+      </thead>
+      <tbody id="results-body">
+      <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
+        <td>{{result.dateTime | date : 'medium'}}</td>
+        <td>{{result.description}}</td>
+        <td ng-switch-when="Withdrawal">{{result.amount.amount}}</td>
+        <td ng-switch-when="Withdrawal"></td>
+        <td ng-switch-when="Deposit"></td>
+        <td ng-switch-when="Deposit">{{result.amount.amount}}</td>
+        <td ng-switch-default></td>
+        <td ng-switch-default></td>
+        <td>{{result.balance.amount}}</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <dir-pagination-controls boundary-links="true"></dir-pagination-controls>
+</div>
+----
+
+Wire up the controller for the custom statement view:
+
+.app/scripts/controllers/reports/custom.js
+[source,javascript]
+----
+'use strict';
+
+/**
+ * @ngdoc function
+ * @name bankPlusApp.controller:ReportsCustomCtrl
+ * @description
+ * # ReportsCustomCtrl
+ * Controller of the bankPlusApp
+ */
+angular.module('bankPlusApp')
+  .controller('ReportsCustomCtrl', ['$scope', '$location', 'flash', 'customStatementResource', function ($scope, $location, flash, customStatementResource) {
+    $scope.currentPage = 1;
+    $scope.statementLines = [];
+
+    $scope.generateReport = function() {
+      if($scope.fromDate && $scope.toDate && ($scope.fromDate > $scope.toDate)) {
+        flash.setMessage({'type':'danger','text':'From date cannot be later than To date.'}, true);
+        return;
+      }
+      $scope.statementLines = customStatementResource.queryAll({'customerId':auth.customer.id, 'fromDate': $scope.fromDate, 'toDate': $scope.toDate});
+    };
+
+    $scope.open = function($event, fromOrTo) {
+      $event.preventDefault();
+      $event.stopPropagation();
+
+      if(fromOrTo == 'from') {
+        $scope.fromOpened = true;
+      } else {
+        $scope.toOpened = true;
+      }
+
+    };
+
+    $scope.dateOptions = {
+      formatYear: 'yy',
+      startingDay: 1
+    };
+
+  }]);
+----
+
+The controller validates the input date ranges and then issues requests to the backend. It displays any success or error messages depending on the status of the transaction.
+
+And create the `customStatementResource` definition:
+
+.app/scripts/services/customStatementFactory.js
+[source,javascript]
+----
+'use strict';
+
+angular.module('bankPlusApp').factory('customStatementResource', function($resource){
+    var resource = $resource('/bankplus/rest/customers/:customerId/reports/',null,{'queryAll':{method:'GET',isArray:true}});
+    return resource;
+});
+----
+
+This concludes the creation of a functional version of the front-end artifacts. We'll later integrate this with the backend that we will create in the next chapter.

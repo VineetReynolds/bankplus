@@ -1,0 +1,5181 @@
+Now that we have the front-end developed with a set of contracts for the REST API, we can proceed to implement the backend to implement the contract. Also, use cases that were not covered in the front-end would be implemented in this chapter.
+
+== Setting up the project
+
+We start by creating a new Maven project to house the sources for the back-end. We'll use JBoss Forge to scaffold the back-end rapidly.
+
+Start JBoss Forge in the console, or in JBoss Developer Studio.
+
+Create a new Maven project using JBoss Forge. Then let's setup JAX-RS and JPA in the newly created project.
+
+We're now ready to begin creating the various REST resources in the backend.
+
+== Creating the REST API
+
+Unlike the front-end, we won't be implementing the use cases for the backend in the same order. We'll avoid implementing the use cases in a chronological order as we'd like to study what use cases, and as a consequence, what components or services should be implemented before the others. It may not be possible for all use cases to be developed in parallel to each other - dependencies will exist among the components/services that will necessitate one component or service to be created before others.
+
+Therefore, we ought to study what dependencies exist among the components/services in the technical architecture for the backend, and then implement the use cases for the most dependent service first. Choosing to implement first any service, that all other services depend on, allows for development to be structured with the idea of removing the largest impediments first.
+
+In the case of BankPlus, with respect to dependency management, we note the following:
+
+* the customer service depends on the core services, the financial accounting service and the transactions service
+* the transactions service depends on the core services and the financial accounting service
+* the financial accounting service depends on the core services
+
+It is now evident that implement the core services and the financial accounting service would clear the path for other services to be built.
+
+=== The core classes and services
+
+The core classes and services of the backend include classes that will be used in most if not all of the components or services in the backend. Given the functionality of BankPlus, one is bound to find concepts involving monetary units (money and currency) used in most, if not all of the services. As examples -
+
+* the balance of an account would be stated as a monetary unit (a currency) and an amount specified in decimal.
+* similarly, deposits, withdrawals and payments are also specified in terms of a currency and a decimal amount.
+* account statements would also contain records where in the money deposited or withdrawn from the account would be specified.
+
+We'll therefore start by creating classes to represent `Money` and `Currency`.
+
+`Currencies` is a repository used to obtain a reference to a `Currency` instance. For now, only a single `Currency` (USD), will be utilied in the system, but we'll create a `Currency` class to allow for extension of currencies later, instead of hard-coding the currency somewhere:
+
+.src/main/java/org/jboss/examples/bankplus/money/model/Currency.java
+[source,java]
+----
+package org.jboss.examples.bankplus.money.model;
+
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlTransient;
+
+@Entity
+public class Currency {
+
+    @Id
+    @XmlAttribute
+    private String currencyCode;
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
+    @XmlTransient
+    private String name;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return "Currency{" +
+                "currencyCode='" + currencyCode + '\'' +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Currency)) return false;
+
+        Currency currency = (Currency) o;
+
+        if (!currencyCode.equals(currency.currencyCode)) return false;
+        return name.equals(currency.name);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = currencyCode.hashCode();
+        result = 31 * result + name.hashCode();
+        return result;
+    }
+}
+----
+
+The `Currency` class shown above is quite simple - it just stores a unique currency code and name.
+
+The associated `Currencies` service, acts as a repository to access and manage `Currency` instances:
+
+.src/main/java/org/jboss/examples/bankplus/money/services/Currencies.java
+[source,java]
+----
+package org.jboss.examples.bankplus.money.services;
+
+import org.jboss.examples.bankplus.money.model.Currency;
+
+import javax.ejb.Stateless;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+
+@Stateless
+public class Currencies {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public Currency create(String name, String code) {
+        Currency currency = new Currency();
+        currency.setName(name);
+        currency.setCurrencyCode(code);
+        em.persist(currency);
+        return currency;
+    }
+
+    public Currency findByCode(String code) {
+        TypedQuery<Currency> findByCodeQuery = em.createQuery("SELECT DISTINCT c FROM Currency c WHERE c.currencyCode = :currencyCode ORDER BY c.id", Currency.class);
+        findByCodeQuery.setParameter("currencyCode", code);
+        Currency currency;
+        try {
+            currency = findByCodeQuery.getSingleResult();
+        } catch (NoResultException nre) {
+            currency = null;
+        }
+        return currency;
+    }
+}
+----
+
+For now, we only need to create or find new currencies. There is no need to delete or update currencies at this point.
+
+We then proceed to code the `Money` class, used to represent `Money` instances. Unlike most other classes, this one is immutable by nature, as it seeks to represent a value, and is thus implemented with the Value Object pattern. The use of the public constructor is discouraged, as it exists only for the purpose of meeting the needs of the JPA standard. A public constructor accepting the currency and amount is the preferred means to specify the currency and amount attributes of the class - there are no setter methods for these attributes, discouraging any attempt to change their values after the `Money` instance is constructed. The class also carries methods to allow for mathematical operations like addition and subtraction to be performed on `Money` instances:
+
+[source,java]
+----
+package org.jboss.examples.bankplus.money.model;
+
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
+import javax.persistence.Embeddable;
+import javax.persistence.ManyToOne;
+import javax.validation.constraints.NotNull;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlValue;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import java.math.BigDecimal;
+
+@Embeddable
+@JsonSerialize(using = JsonMoneySerializer.class)
+@JsonDeserialize(using = JsonMoneyDeserializer.class)
+public class Money {
+
+    public Money() {
+    }
+
+    @NotNull
+    @ManyToOne
+    @XmlAttribute
+    @XmlJavaTypeAdapter(CurrencyAdapter.class)
+    private Currency currency;
+
+    @NotNull
+    @XmlValue
+    private BigDecimal amount;
+
+    public Money(Currency currency, BigDecimal amount) {
+        this.currency = currency;
+        this.amount = amount;
+    }
+
+    public Money add(final Money augend) {
+        if (augend.currency.equals(currency)) {
+            BigDecimal sum = this.amount.add(augend.amount);
+            return new Money(currency, sum);
+        } else {
+            throw new IllegalArgumentException("Currencies must match.");
+        }
+    }
+
+    public Money subtract(Money subtrahend) {
+        if (subtrahend.currency.equals(currency)) {
+            BigDecimal difference = this.amount.subtract(subtrahend.amount);
+            return new Money(currency, difference);
+        } else {
+            throw new IllegalArgumentException("Currencies must match.");
+        }
+    }
+
+    public Money multiply(Money multiplicand) {
+        if (multiplicand.currency.equals(currency)) {
+            BigDecimal sum = this.amount.multiply(multiplicand.amount);
+            return new Money(currency, sum);
+        } else {
+            throw new IllegalArgumentException("Currencies must match.");
+        }
+    }
+
+    public Money divide(Money divisor) {
+        if (divisor.currency.equals(currency)) {
+            BigDecimal sum = this.amount.divide(divisor.amount);
+            return new Money(currency, sum);
+        } else {
+            throw new IllegalArgumentException("Currencies must match.");
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((amount == null) ? 0 : amount.hashCode());
+        result = prime * result + ((currency == null) ? 0 : currency.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof Money)) {
+            return false;
+        }
+        Money other = (Money) obj;
+        return (currency.equals(other.currency) && (amount.compareTo(other.amount) == 0));
+    }
+
+    @Override
+    public String toString() {
+        return "Money [" + currency.getCurrencyCode() + ", " + amount + "]";
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public Currency getCurrency() {
+        return currency;
+    }
+
+    public int compareTo(Money val) {
+        if(this == val) {
+            return 0;
+        }
+        if(!this.currency.equals(val.getCurrency())) {
+            throw new IllegalArgumentException("Currency does not match.");
+        }
+        return this.amount.compareTo(val.getAmount());
+    }
+}
+----
+
+To allow for serialization and de-serialization of `Money` instances in the REST API, we also create Jackson-based serializers and deserializers:
+
+.src/main/java/org/jboss/examples/bankplus/money/model/JsonMoneySerializer.java
+[source,java]
+----
+package org.jboss.examples.bankplus.money.model;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+
+import java.io.IOException;
+
+public class JsonMoneySerializer extends JsonSerializer<Money> {
+    @Override
+    public void serialize(Money money, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException, JsonProcessingException {
+        jsonGenerator.writeStartObject();
+        jsonGenerator.writeStringField("ccy", money.getCurrency().getCurrencyCode());
+        jsonGenerator.writeNumberField("amount", money.getAmount());
+        jsonGenerator.writeEndObject();
+    }
+}
+----
+
+The serializer merely create a new JSON object with `ccy` and `amount` attributes reflecting the currency and amount of Money. Jackson takes care of whether the new JSON object should be nested inside another or not - for instance, when the balance of an account (a `Money` instance) is to be serialized as part of the customer represntation.
+
+A corresponding de-serializer is also created:
+
+.src/main/java/org/jboss/examples/bankplus/money/model/JsonMoneyDeserializer.java
+[source,java]
+----
+package org.jboss.examples.bankplus.money.model;
+
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.ObjectCodec;
+import com.fasterxml.jackson.core.TreeNode;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.jboss.examples.bankplus.money.services.Currencies;
+
+import javax.enterprise.context.spi.CreationalContext;
+import javax.enterprise.inject.spi.Bean;
+import javax.enterprise.inject.spi.BeanManager;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import java.io.IOException;
+import java.math.BigDecimal;
+
+public class JsonMoneyDeserializer extends JsonDeserializer<Money> {
+    @Override
+    public Money deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JsonProcessingException {
+        JsonNode node = jsonParser.getCodec().readTree(jsonParser);
+        String currencyCode = node.get("ccy").textValue();
+        BigDecimal amount = node.get("amount").decimalValue();
+        BeanManager bm = getBeanManager();
+        Bean<Currencies> bean = (Bean<Currencies>) bm.getBeans(Currencies.class).iterator().next();
+        CreationalContext<Currencies> ctx = bm.createCreationalContext(bean);
+        Currencies currencies = (Currencies) bm.getReference(bean, Currencies.class, ctx);
+        return new Money(currencies.findByCode(currencyCode), amount);
+    }
+
+    public BeanManager getBeanManager()
+    {
+        try {
+            InitialContext initialContext = new InitialContext();
+            return (BeanManager) initialContext.lookup("java:comp/BeanManager");
+        } catch (NamingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+----
+
+The deserializer is somewhat complicated in that it should create a `Money` instance with a `Currency` instance. As we know, `Currency` instances are stored in the database, and cannot be created on the fly using ordinary constructors. `Currency` instances, let's not forget, can be fetched using the `Currencies` repository. But this repository cannot be injected as a dependency into the deserializer. Consequently, we'll lookup the CDI `BeanManager` that will aid us in creating an instance of the `Currencies` repository for eventual use to lookup currencies.
+
+The `Money` class also requires a JAXB XML adapter (`@XmlJavaTypeAdapter(CurrencyAdapter.class)`) to be created for the `Currency` class, so as to represent `Money` instances in XML in an terse form, like so:
+
+----
+<money currency="USD">10.25</money>
+----
+
+instead of the more verbose variant, like:
+
+----
+<money>
+    <currency>
+        <code>USD</code>
+    </currency>
+    <amount>10.25</amount>
+</money>
+----
+
+We'll write up a `CurrencyAdapter` class for the same:
+
+.src/main/java/org/jboss/examples/bankplus/money/model/CurrencyAdapter.java
+[source,java]
+----
+package org.jboss.examples.bankplus.money.model;
+
+import org.jboss.examples.bankplus.money.services.Currencies;
+
+import javax.xml.bind.annotation.adapters.XmlAdapter;
+
+public class CurrencyAdapter extends XmlAdapter<String, Currency> {
+
+    // Since @Inject does not work
+    private Currencies currencies;
+
+    public String marshal(Currency currency) throws Exception {
+        return currency.getCurrencyCode();
+    }
+
+    /*
+     * XML => Java
+     * Given an XML string, use it to build an instance of the unmappable class.
+     */
+    public Currency unmarshal(String code) throws Exception {
+        return currencies.findByCode(code);
+    }
+
+    public void setCurrencies(Currencies currencies) {
+        this.currencies = currencies;
+    }
+}
+----
+
+During serialization, the adapter takes will serialize `Currency` instances only as their currency codes (like `USD`). During de-serialization, the opposite effect is required - the `Currency` instance is looked up using the code, and it is returned to the de-serializer to be populated in a `Money` instance. The `currencies` member will be populated by the code that will serialize or deserialize XML messages containing `Money` instances; for now, we will not worry about how this is injected.
+
+Note the use of `@XmlAttribute` and `@XmlValue` annotations on the currency and amount fields of the `Money` class - these annotations would be interpreted by JAXB to ensure the desired structure of XML (shown above) would be generated on serialization, and de-serializable in the reverse.
+
+We also need a 'wrapper' class for Dates, to ensure that dates can be sent as query parameters to JAX-RS resource classes. The wrapper class would take care of ensuring the date is de-serialized correctly, instead of being mistaken for a `Long`:
+
+.src/main/java/org/jboss/examples/bankplus/core/rest/dto/DateWrapper.java
+[source,java]
+----
+package org.jboss.examples.bankplus.core.rest.dto;
+
+import java.io.Serializable;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+public class DateWrapper implements Serializable {
+
+    private SimpleDateFormat ISO8601_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX");
+
+    public DateWrapper (String dateString) {
+        try {
+            date = new Date(dateString);
+        } catch(Exception e) {
+            try {
+                date = ISO8601_FORMAT.parse(dateString);
+            } catch (ParseException parseEx) {
+                throw new IllegalArgumentException("Unable to parse date");
+            }
+        }
+    }
+
+    private Date date;
+
+    public Date getDate() {
+        return date;
+    }
+
+    public void setDate(Date date) {
+        this.date = date;
+    }
+}
+----
+
+Finally, to wrap up the core classes, let's create a runtime exception class, that will be extended by individual services for every type of business/application exception that should result in a rollback of the transaction initiated by the container:
+
+.src/main/java/org/jboss/examples/bankplus/core/exception/BusinessException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.core.exception;
+
+public abstract class BusinessException extends RuntimeException {
+
+    public BusinessException() {
+    }
+
+    public BusinessException(String message) {
+        super(message);
+    }
+
+    public BusinessException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public BusinessException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+=== The Financial Accounting service
+
+We now proceed to implement the financial accounting service, where the financial accounts would be maintained. We won't build a full blown accounting system, but we'll definitely build a few features found in some. Remember, the aim of this tutorial, is to be as realistic as possible in it's implementation, so we won't be inventing any new concepts in accounting. We'll be implementing a few of the concepts found in accounting information systems. Of course, if you were to build a banking system, you would more likely choose to integrate with the GL or Financial Accounting module of an ERP system, instead of writing an accounting module from scratch.
+
+Let's model a financial account:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/Account.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.*;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+@Entity
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+public class Account {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @Version
+    @Column(name = "version")
+    private int version;
+
+    public int getVersion() {
+        return this.version;
+    }
+
+    public void setVersion(final int version) {
+        this.version = version;
+    }
+
+    @Column(unique = true)
+    private String accountId;
+
+    public String getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(final String accountId) {
+        this.accountId = accountId;
+    }
+
+    private String name;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(final String name) {
+        this.name = name;
+    }
+
+    @Enumerated(EnumType.STRING)
+    private AccountType accountType;
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public void setAccountType(final AccountType accountType) {
+        this.accountType = accountType;
+    }
+
+    @Embedded
+    @AttributeOverrides(
+            @AttributeOverride(name="amount",column=@Column(name="currentBalanceAmount")))
+    @AssociationOverrides(
+            @AssociationOverride(name="currency",joinColumns = @JoinColumn(name="currentBalanceCurrency")))
+    private Money currentBalance;
+
+    public Money getCurrentBalance() {
+        return currentBalance;
+    }
+
+    public void setCurrentBalance(final Money balance) {
+        this.currentBalance = balance;
+    }
+
+    @Embedded
+    @AttributeOverrides(
+            @AttributeOverride(name="amount",column=@Column(name="openingBalanceAmount")))
+    @AssociationOverrides(
+            @AssociationOverride(name="currency",joinColumns = @JoinColumn(name="openingBalanceCurrency")))
+    private Money openingBalance;
+
+    public Money getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(Money openingBalance) {
+        this.openingBalance = openingBalance;
+    }
+
+    @Temporal(TemporalType.DATE)
+    private Date periodOpenDate;
+
+    public Date getPeriodOpenDate() {
+        return periodOpenDate;
+    }
+
+    public void setPeriodOpenDate(Date periodOpenDate) {
+        this.periodOpenDate = periodOpenDate;
+    }
+
+    @ManyToOne
+    private Account parentAccount;
+
+    public Account getParentAccount() {
+        return parentAccount;
+    }
+
+    public void setParentAccount(final Account parentAccount) {
+        this.parentAccount = parentAccount;
+        // Reset account type to that of parent account
+        if(parentAccount != null) {
+            this.accountType = parentAccount.getAccountType();
+        }
+    }
+
+    @OneToMany
+    private Set<Account> childAccounts = new HashSet<>();
+
+    public Set<Account> getChildAccounts() {
+        return childAccounts;
+    }
+
+    public void setChildAccounts(final Set<Account> childAccounts) {
+        this.childAccounts = childAccounts;
+    }
+
+    @OneToMany
+    private Set<JournalEntry> journalEntries = new HashSet<>();
+
+    public Set<JournalEntry> getJournalEntries() {
+        return journalEntries;
+    }
+
+    public void setJournalEntries(final Set<JournalEntry> journalEntries) {
+        this.journalEntries = journalEntries;
+    }
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date lastUpdatedOn;
+
+    public Date getLastUpdatedOn() {
+        return lastUpdatedOn;
+    }
+
+    public void setLastUpdatedOn(Date lastUpdatedOn) {
+        this.lastUpdatedOn = lastUpdatedOn;
+    }
+
+    @OneToMany(mappedBy = "account", cascade = CascadeType.ALL)
+    private Set<AccountBalanceHistory> balanceHistories = new HashSet<>();
+
+    public Set<AccountBalanceHistory> getBalanceHistories() {
+        return  balanceHistories;
+    }
+
+    public void setBalanceHistories(Set<AccountBalanceHistory> balanceHistories) {
+        this.balanceHistories = balanceHistories;
+    }
+
+    @Override
+    public String toString() {
+        return "Account{" +
+                "accountId='" + accountId + '\'' +
+                ", name='" + name + '\'' +
+                '}';
+    }
+}
+----
+
+Let's take a closer look at this class. It contains members for storing:
+
+* the auto-generated Id, and a version for optimistic locking
+* an Account Id (different from the auto-generated Id), that follows a naming convention for financial accounts - assets would be identified as 1001, 1002, etc. liablities as 20001, 20002 etc.
+* a name to easily identify what the account is supposed to do - like the cash account of the bank, or a financial account for a specific customer
+* the type of the account - Assets, Liablities, Income, Expense etc.
+* the current balance of the account
+* the opening balance of the account when the account was opened
+* the date when the account was opened
+* the parent account of this account
+* any child accounts of this account
+* the journal entries (deposits or withdrawals) made against the account
+* the date when the account balance was last updated
+* the history of account balances for the account, starting with the account opening date
+
+The class on it's own does not contain a lot of logic. Other service classes would perform the necessary steps to create a new financial account with an opening balance, record transactions against the account in the form of journal entries, recompute the account balance when a transaction occurs etc.
+
+Let's take a look at the other classes referenced in the `Account` class. The `AccountType` class is just an enumeration of the various types of accounts supported in the system:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/AccountType.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+public enum AccountType {
+    ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE;
+}
+----
+
+The `AccountBalanceHistory` stores the opening balance of an account for every day. Balances are computed for all accounts, at least once a day.
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/AccountBalanceHistory.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.*;
+import java.util.Date;
+
+@Entity
+public class AccountBalanceHistory {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @ManyToOne
+    private Account account;
+
+    public Account getAccount() {
+        return account;
+    }
+
+    public void setAccount(Account account) {
+        this.account = account;
+    }
+
+    @Temporal(TemporalType.DATE)
+    private Date date;
+
+    public Date getDate() {
+        return date;
+    }
+
+    public void setDate(Date date) {
+        this.date = date;
+    }
+
+    @Embedded
+    private Money openingBalance;
+
+    public Money getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(Money balance) {
+        this.openingBalance = balance;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AccountBalanceHistory)) return false;
+
+        AccountBalanceHistory that = (AccountBalanceHistory) o;
+
+        if (!account.equals(that.account)) return false;
+        if (!date.equals(that.date)) return false;
+        return openingBalance.equals(that.openingBalance);
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result = account.hashCode();
+        result = 31 * result + date.hashCode();
+        result = 31 * result + openingBalance.hashCode();
+        return result;
+    }
+}
+----
+
+The `JournalEntry` class models a single journal entry made in an accounting journal.
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/JournalEntry.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.transactions.model.Event;
+
+import javax.persistence.*;
+import java.util.Date;
+
+@Entity
+public class JournalEntry {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @ManyToOne
+    private Account account;
+
+    public Account getAccount() {
+        return account;
+    }
+
+    public void setAccount(final Account account) {
+        this.account = account;
+    }
+
+    @Enumerated(EnumType.STRING)
+    private EntryType type;
+
+    public EntryType getType() {
+        return type;
+    }
+
+    public void setType(final EntryType type) {
+        this.type = type;
+    }
+
+    @Embedded
+    private Money amount;
+
+    public Money getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Money amount) {
+        this.amount = amount;
+    }
+
+    @Enumerated(EnumType.STRING)
+    private PostingStatus postingStatus;
+
+    public PostingStatus getPostingStatus() {
+        return postingStatus;
+    }
+
+    public void setPostingStatus(PostingStatus postingStatus) {
+        this.postingStatus = postingStatus;
+    }
+
+    @Temporal(TemporalType.TIMESTAMP)
+    public Date dateTime;
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    @ManyToOne
+    private Event financialEvent;
+
+    public Event getFinancialEvent() {
+        return financialEvent;
+    }
+
+    public void setFinancialEvent(Event financialEvent) {
+        this.financialEvent = financialEvent;
+    }
+}
+----
+
+It contains:
+
+* an auto-generated Id,
+* the account to which the journal entry must be made,
+* the type of entry - credit or debit. The type of the entry determines how the balance of the account is affected - if a credit entry is made against a liability account, then the balance increases. So if a customer's account (a liability account to the bank) is credited, it's balance would increase. Likewise, if hte cash account of the bank (an asset account) is debited, it's balance would increase.
+* the amount to be credited or debited
+* the status of the journal entry - whether it was posted or not to the (general ledger) accounts. The account balance is affected only after a journal entry is posted to the ledger. Unposted entries do not affect the account balance.
+* the time at which the entry was created
+* the financial event (deposit, payment, withdrawal) that created the entry
+
+It should be noted that for every financial transaction that occurs in the system (deposit, withdrawal or payment), the credits and debits of various entries generated by the system would match for that transaction. Additionally, the credits and debits would match on a system-wide basis.
+
+The `EntryType` class is just a simple enumeration:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/EntryType.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+public enum EntryType {
+    DEBIT, CREDIT
+}
+----
+
+As is the `PostingStatus` enumeration:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/PostingStatus.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+public enum PostingStatus {
+    UNPOSTED, POSTED;
+}
+----
+
+We create a helper class `PeriodicBalanceCalculator`, to periodically (at the rate of every day) re-compute the balances of all accounts in the system:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/PeriodicBalanceCalculator.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.model;
+
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
+
+import javax.ejb.Schedule;
+import javax.ejb.Stateless;
+import javax.ejb.TransactionAttribute;
+import javax.ejb.TransactionAttributeType;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Collection;
+import java.util.Date;
+import java.util.List;
+
+@Stateless
+public class PeriodicBalanceCalculator {
+
+    @Inject
+    private Accounts accounts;
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Schedule(minute = "*/1", hour = "*")
+    public void scheduleBalanceComputation(){
+        List<Account> allLeafAccounts = accounts.listLeafAccounts();
+        for(Account leafAccount: allLeafAccounts) {
+            updateAccountBalance(leafAccount);
+        }
+    }
+
+    @TransactionAttribute(TransactionAttributeType.REQUIRES_NEW)
+    public void updateAccountBalance(Account account) {
+        LocalDate previousDate = LocalDate.now().minusDays(1);
+        TypedQuery<AccountBalanceHistory> yesterdayBalanceQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :previousDate", AccountBalanceHistory.class);
+        yesterdayBalanceQuery.setParameter("account", account);
+        yesterdayBalanceQuery.setParameter("previousDate", Date.from(previousDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        Money balance = null;
+        try {
+            AccountBalanceHistory previousBalance = yesterdayBalanceQuery.getSingleResult();
+            balance = previousBalance.getOpeningBalance();
+        } catch (NoResultException noRes) {
+            balance = account.getOpeningBalance();
+            Instant instant = Instant.ofEpochMilli(account.getPeriodOpenDate().getTime());
+            previousDate = LocalDateTime.ofInstant(instant, ZoneId.systemDefault()).toLocalDate();
+        }
+
+        // Compute the balance based on yesterday's opening balance
+        // and the journal entries posted for this account for yesterday.
+        // Use the opening balance if yesterday's balance is not found, as the account may have been opened yesterday.
+        for (JournalEntry journalEntry : getPostedEntriesForAccountSince(account, previousDate, LocalDate.now())) {
+            Money amount = journalEntry.getAmount();
+            EntryType entryType = journalEntry.getType();
+            AccountType accountType = account.getAccountType();
+            if (accountType == AccountType.ASSET || accountType == AccountType.EXPENSE) {
+                if (entryType == EntryType.DEBIT) {
+                    balance = balance.add(amount);
+                } else {
+                    balance = balance.subtract(amount);
+                }
+            } else {
+                if (entryType == EntryType.DEBIT) {
+                    balance = balance.subtract(amount);
+                } else {
+                    balance = balance.add(amount);
+                }
+            }
+        }
+
+        // Assuming child account balances are up to date, recompute the parent's balance
+        for (Account childAccount : account.getChildAccounts()) {
+            balance = balance.add(childAccount.getCurrentBalance());
+        }
+        account.setCurrentBalance(balance);
+        AccountBalanceHistory currentBalance = new AccountBalanceHistory();
+        currentBalance.setOpeningBalance(balance);
+        currentBalance.setAccount(account);
+        Date today = Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant());
+        currentBalance.setDate(today);
+        account.getBalanceHistories().add(currentBalance);
+        account.setLastUpdatedOn(new Date());
+
+        em.merge(account);
+
+        // Recursively update until we hit the Ledger Head accounts (Assets, Liabilities, etc.)
+        Account parentAccount = account.getParentAccount();
+        if (parentAccount != null) {
+            updateAccountBalance(parentAccount);
+        }
+    }
+
+    private Collection<JournalEntry> getPostedEntriesForAccountSince(Account account, LocalDate from, LocalDate to) {
+        String query = "SELECT j FROM JournalEntry j WHERE j.account = :account " +
+                "AND j.postingStatus = org.jboss.examples.bankplus.accounting.model.PostingStatus.POSTED";
+        TypedQuery<JournalEntry> journalEntryQuery = null;
+        if(from == null) {
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+        } else {
+            query += " AND j.dateTime >= :from AND j.dateTime < :to";
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+            journalEntryQuery.setParameter("from", Date.from(from.atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
+            journalEntryQuery.setParameter("to", Date.from(to.plusDays(1).atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
+        }
+        List<JournalEntry> entries = journalEntryQuery.getResultList();
+        return entries;
+    }
+}
+----
+
+The balances are computed by treating 
+
+* every debit entry to an asset-type or expense-type account as one that increases the balance by the entry amount
+* every credit entry to an asset-type or expense-type account as one that decreases the balance by the entry amount
+* every debit entry to a liabilties-type or income-type account as one that decreases the balance by the entry amount
+* every credit entry to a liabilties-type or income-type account as one that increases the balance by the entry amount
+
+Once the balance of an account is computed from the posted entries to that account, the parent account is instructed to re-compute it's balance.
+To optimize this process and minimize the number of balance re-computations, the leaf accounts in the accounting hierarchy (the accounts with no child accounts) will be instructed to compute their balances first, and then roll up the changes to their parents.
+
+We now proceed to create the services in the financial accounting moduel, starting with the repository that would be used to access the accounts in the system - the `Accounts` class:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/services/Accounts.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.services;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
+import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.ejb.Stateless;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.List;
+
+@Stateless
+public class Accounts {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public Account newAccount(String accountId, String name, AccountType accountType, Account parentAccount, Money openingBalance) {
+        Account account = new Account();
+        account.setAccountId(accountId);
+        account.setName(name);
+        if (parentAccount != null && accountType != parentAccount.getAccountType()) {
+            throw new AccountException("The account type: [" + accountType + "] does not match the parent account's type: [" + parentAccount.getAccountType() + "]");
+        }
+        account.setAccountType(accountType);
+        account.setOpeningBalance(openingBalance);
+        account.setCurrentBalance(openingBalance);
+        account.setPeriodOpenDate(Date.from(LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toInstant()));
+        account.setParentAccount(parentAccount);
+
+        // Initialize account balance history
+        Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
+        AccountBalanceHistory balanceHistory = new AccountBalanceHistory();
+        balanceHistory.setAccount(account);
+        balanceHistory.setDate(now);
+        balanceHistory.setOpeningBalance(openingBalance);
+        account.getBalanceHistories().add(balanceHistory);
+        account.setLastUpdatedOn(now);
+
+        em.persist(account);
+        return account;
+    }
+
+    public Account findByAccountId(final String accountId) {
+        TypedQuery<Account> findByIdQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE a.accountId = :accountId", Account.class);
+        findByIdQuery.setParameter("accountId", accountId);
+        try {
+            Account account = findByIdQuery.getSingleResult();
+            return account;
+        } catch (NoResultException noResEx) {
+            throw new AccountException("Could not find account with Id.");
+        }
+    }
+
+
+    public Account getCashAccount() {
+        TypedQuery<Account> findByNameQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE UPPER(a.name) = 'CASH'", Account.class);
+        Account cashAccount = findByNameQuery.getSingleResult();
+        return cashAccount;
+    }
+
+    public Account getChargesAccount() {
+        TypedQuery<Account> findByNameQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE UPPER(a.name) = 'CHARGES'", Account.class);
+        Account chargesAccount = findByNameQuery.getSingleResult();
+        return chargesAccount;
+    }
+
+    public Account getClearingAccount() {
+        TypedQuery<Account> findByNameQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE UPPER(a.name) = 'CLEARING'", Account.class);
+        Account clearingAccount = findByNameQuery.getSingleResult();
+        return clearingAccount;
+    }
+
+    public Account getLiabilitiesAccount() {
+        TypedQuery<Account> findByNameQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE UPPER(a.name) = 'LIABILITIES'", Account.class);
+        Account liabiltiesAccount = findByNameQuery.getSingleResult();
+        return liabiltiesAccount;
+    }
+
+    public List<Account> listLeafAccounts() {
+        TypedQuery<Account> findAllLeafAccountsQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE a.parentAccount != NULL AND a.childAccounts.size = 0 ORDER BY a.id", Account.class);
+        return findAllLeafAccountsQuery.getResultList();
+    }
+}
+----
+
+The repository is quite simple in that it has a method to create a new financial account, setting the account Id and name of the account, along with initializing the balance of the account. Accompanying this method, are methods to find a specific account given an Id, as well as finder methods to obtain references to financial accounts relevant to the system - charges, cash, liabilities, clearing etc. And finally, there is a method to list all leaf accounts (accounts that have no child accounts) in the system (which is used for balance recomputation among others).
+
+In order to post journal entries to the system, we need to model the `Journal` where entries would be posted. It is also a repository, as it provides access to all `JournalEntry` instances:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/services/Journal.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.services;
+
+import org.jboss.examples.bankplus.accounting.model.*;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.ejb.Stateless;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import java.util.*;
+
+@Stateless
+public class Journal {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public void computeAccountBalance(Account account) {
+        // Compute the balance based on the opening balance and the journal entries posted for this account.
+        Money balance = account.getOpeningBalance();
+        for (JournalEntry journalEntry : getPostedEntriesForAccountSince(account, account.getPeriodOpenDate())) {
+            Money amount = journalEntry.getAmount();
+            EntryType entryType = journalEntry.getType();
+            AccountType accountType = account.getAccountType();
+            if (accountType == AccountType.ASSET || accountType == AccountType.EXPENSE) {
+                if (entryType == EntryType.DEBIT) {
+                    balance = balance.add(amount);
+                } else {
+                    balance = balance.subtract(amount);
+                }
+            } else {
+                if (entryType == EntryType.DEBIT) {
+                    balance = balance.subtract(amount);
+                } else {
+                    balance = balance.add(amount);
+                }
+            }
+        }
+
+        // Assuming child account balances are up to date, recompute the parent's balance
+        for (Account childAccount : account.getChildAccounts()) {
+            balance = balance.add(childAccount.getCurrentBalance());
+        }
+        account.setCurrentBalance(balance);
+        account.setLastUpdatedOn(new Date());
+
+        em.merge(account);
+
+        // Recursively update until we hit the Ledger Head accounts (Assets, Liabilities, etc.)
+        Account parentAccount = account.getParentAccount();
+        if (parentAccount != null) {
+            computeAccountBalance(parentAccount);
+        }
+    }
+
+    public void postToLedger(Set<JournalEntry> entries) {
+        for(JournalEntry entry: entries) {
+            if(entry.getPostingStatus() == PostingStatus.UNPOSTED) {
+                entry.setPostingStatus(PostingStatus.POSTED);
+                em.persist(entry);
+                computeAccountBalance(entry.getAccount());
+            }
+        }
+    }
+
+    private Collection<JournalEntry> getPostedEntriesForAccountSince(Account account, Date dateTime) {
+        String query = "SELECT j FROM JournalEntry j WHERE j.account = :account " +
+                "AND j.postingStatus = org.jboss.examples.bankplus.accounting.model.PostingStatus.POSTED";
+        TypedQuery<JournalEntry> journalEntryQuery = null;
+        if(dateTime == null) {
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+        } else {
+            query += " AND j.dateTime >= :dateTime";
+            journalEntryQuery = em.createQuery(query, JournalEntry.class);
+            journalEntryQuery.setParameter("account", account);
+            journalEntryQuery.setParameter("dateTime", dateTime);
+        }
+        List<JournalEntry> entries = journalEntryQuery.getResultList();
+        return entries;
+    }
+}
+----
+
+Obviously, the `Journal` allows a collection of journal entries to be posted to it. It also allows for queries of journal entries that were posted to an account with a specific criteria - entries beyond a specified date. There is also a method to recompute the balance of a specified Account.
+
+Let's wrap up by creating a runtime exception class - `AccountException` that can be referenced in the services for the accounting module. When this exception is thrown, the container marks the transaction for rollback.
+
+.src/main/java/org/jboss/examples/bankplus/accounting/services/AccountException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.services;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class AccountException extends RuntimeException {
+
+    public AccountException() {
+        super();
+    }
+
+    public AccountException(String message) {
+        super(message);
+    }
+
+    public AccountException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public AccountException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+We've just completed one module. Of course, we cannot do much as of now, as there is no REST API to consume the services in this module.
+
+=== The customer service
+
+[NOTE]
+====
+As a prospective user of the payment bank, I would be able to register an account with the payment bank.
+====
+
+This is a somewhat complex use case from the point of view of technical architecture. User registration is handled by KeyCloak, but we also need to ensure that the registration event results in creation of a customer in the BankPlus backend.
+
+We'll first create the BankPlus backend API to create new customers. All we need to do is create a new JAX-RS resource class at the `/customers` URL, that supports CRUD semantics:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/CustomerResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.reporting.rest.ReportsResource;
+import org.jboss.examples.bankplus.customer.services.CustomerService;
+import org.jboss.examples.bankplus.customer.services.CustomerUpdateException;
+import org.jboss.examples.bankplus.transactions.rest.DepositsResource;
+import org.jboss.examples.bankplus.transactions.rest.PaymentsResource;
+import org.jboss.examples.bankplus.transactions.rest.WithdrawalsResource;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriBuilder;
+import java.util.ArrayList;
+import java.util.List;
+
+@Stateless
+@Path("/customers")
+public class CustomerResource {
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @Inject
+    private CustomerService customerService;
+
+    @POST
+    @Consumes("application/json")
+    @Produces("application/json")
+    public Response create(CustomerDTO dto) {
+        Customer customer = customerService.create(dto);
+        return Response.created(UriBuilder.fromResource(CustomerResource.class).path(String.valueOf(customer.getId())).build())
+                .entity(new CustomerDTO(customer))
+                .build();
+    }
+    
+    @GET
+    @Path("/{id:[0-9][0-9]*}")
+    @Produces("application/json")
+    public Response findById(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+        CustomerDTO dto = new CustomerDTO(customer);
+        return Response.ok(dto)
+                .build();
+    }
+    
+    @GET
+    @Produces("application/json")
+    public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult, @QueryParam("email") String email) {
+        List<Customer> searchResults = customerService.listAll(startPosition, maxResult, email);
+        final List<CustomerDTO> results = new ArrayList<CustomerDTO>();
+        for (Customer searchResult : searchResults) {
+            CustomerDTO dto = new CustomerDTO(searchResult);
+            results.add(dto);
+        }
+        return Response.ok(results)
+                .build();
+    }
+    
+    @PUT
+    @Path("/{id:[0-9][0-9]*}")
+    @Consumes("application/json")
+    public Response update(@PathParam("id") Long id, CustomerDTO dto) {
+        if (dto == null) {
+            return Response.status(Status.BAD_REQUEST)
+                    .build();
+        }
+        if (!id.equals(dto.getId())) {
+            return Response.status(Status.CONFLICT).entity(dto)
+                    .build();
+        }
+        try {
+            Customer updatedCustomer = customerService.update(dto);
+            if (updatedCustomer == null) {
+                return Response.status(Status.NOT_FOUND)
+                        .build();
+            }
+            CustomerDTO responseDto = new CustomerDTO(updatedCustomer);
+            return Response.ok(responseDto)
+                    .build();
+        } catch (CustomerUpdateException e) {
+
+            return Response.status(Status.CONFLICT).entity(e.getMessage())
+                    .build();
+        }
+    }
+
+    @DELETE
+    @Path("/{id:[0-9][0-9]*}")
+    public Response deleteById(@PathParam("id") Long id) {
+        boolean deleted = customerService.delete(id);
+        if (deleted) {
+            return Response.noContent()
+                    .build();
+        } else {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+    }
+
+}
+----
+
+The resource class is also annotated to act a stateless session EJB, implying that container managed transactions are initiated before any of the public methods of the class are invoked. Thus, when any of the methods - `create`, `findById`, `listAll`, `update` or  `deleteById` are invoked, a container managed transaction is initiated, and upon completion of the method, the transaction is committed unless rolled back.
+
+The resource class accepts JSON representations of the customers for the create and update methods (`@Consumes("application/json")`), or produces JSON representation of customers for the create, read and update methods (`@Produces("application/json")`).
+
+
+A separate representation class `CustomerDTO` in the form of a DTO (Data Transfer Object) is used to represent customer resources. It is a simple bean-style class that stores several properties of the customer. We'll model it to generate the following representation for a customer:
+
+[source,json]
+----
+{
+    "id": 1,
+    "fullName": "Franz Kafka",
+    "mailingAddress": "",
+    "emailAddress": "franz.kafka@example.com",
+    "phoneNumber": "",
+    "mobileNumber": "",
+    "account":
+    {
+        "accountId": "20000000000000000018",
+        "iban": "US05 PLUS 2000 0000 0000 0000 0018",
+        "balance":
+        {
+            "ccy": "USD",
+            "amount": 0.0
+        },
+        "lastUpdatedOn": 1443973140116
+    }
+}
+----
+
+It contains a few attributes about the customer, some additional attributes about the financial account linked to the customer with details about his account balance. As a consequence, we model the representation class as follows:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/dto/CustomerDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest.dto;
+
+import java.io.Serializable;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+
+import javax.persistence.EntityManager;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement
+public class CustomerDTO implements Serializable {
+
+    private Long id;
+    private String fullName;
+    private String mailingAddress;
+    private String emailAddress;
+    private String phoneNumber;
+    private String mobileNumber;
+    private CustomerAccountDTO account;
+
+    public CustomerDTO() {
+    }
+
+    public CustomerDTO(final Customer entity) {
+        if (entity != null) {
+            this.id = entity.getId();
+            this.fullName = entity.getFullName();
+            this.mailingAddress = entity.getMailingAddress();
+            this.emailAddress = entity.getEmailAddress();
+            this.phoneNumber = entity.getPhoneNumber();
+            this.mobileNumber = entity.getMobileNumber();
+            this.account = new CustomerAccountDTO(entity.getCustomerAccount());
+        }
+    }
+
+    public Customer fromDTO(Customer entity, EntityManager em) {
+        if (entity == null) {
+            entity = new Customer();
+        }
+        entity.setFullName(this.fullName);
+        entity.setMailingAddress(this.mailingAddress);
+        entity.setEmailAddress(this.emailAddress);
+        entity.setPhoneNumber(this.phoneNumber);
+        entity.setMobileNumber(this.mobileNumber);
+        entity = em.merge(entity);
+        return entity;
+    }
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public void setId(final Long id) {
+        this.id = id;
+    }
+
+    public String getFullName() {
+        return this.fullName;
+    }
+
+    public void setFullName(final String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getMailingAddress() {
+        return this.mailingAddress;
+    }
+
+    public void setMailingAddress(final String mailingAddress) {
+        this.mailingAddress = mailingAddress;
+    }
+
+    public String getEmailAddress() {
+        return this.emailAddress;
+    }
+
+    public void setEmailAddress(final String emailAddress) {
+        this.emailAddress = emailAddress;
+    }
+
+    public String getPhoneNumber() {
+        return this.phoneNumber;
+    }
+
+    public void setPhoneNumber(final String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getMobileNumber() {
+        return this.mobileNumber;
+    }
+
+    public void setMobileNumber(final String mobileNumber) {
+        this.mobileNumber = mobileNumber;
+    }
+
+    public CustomerAccountDTO getAccount() {
+        return account;
+    }
+
+    public void setAccount(CustomerAccountDTO account) {
+        this.account = account;
+    }
+}
+----
+
+The financial account information is modelled as a nested attribute of the customer representation in JSON, and thus, has a separate class to store it's representation:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/dto/CustomerAccountDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest.dto;
+
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+
+import javax.persistence.EntityManager;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+public class CustomerAccountDTO implements Serializable {
+
+    private Long accountId;
+
+    private String iban;
+
+    private BigDecimal balance;
+
+    private Date lastUpdatedOn;
+
+    public CustomerAccountDTO() {
+    }
+
+    public CustomerAccountDTO(final CustomerAccount entity) {
+        if (entity != null) {
+            this.accountId = entity.getId();
+            this.iban = entity.getIban();
+            this.balance = entity.getFinancialAccount().getCurrentBalance().getAmount();
+            this.lastUpdatedOn = entity.getFinancialAccount().getLastUpdatedOn();
+        }
+    }
+
+    public CustomerAccount fromDTO(CustomerAccount entity, EntityManager em) {
+        throw new IllegalStateException("This is not expected to be invoked.");
+    }
+
+    public Long getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(Long accountId) {
+        this.accountId = accountId;
+    }
+
+    public String getIban() {
+        return iban;
+    }
+
+    public void setIban(String iban) {
+        this.iban = iban;
+    }
+
+    public BigDecimal getBalance() {
+        return balance;
+    }
+
+    public void setBalance(BigDecimal balance) {
+        this.balance = balance;
+    }
+
+    public Date getLastUpdatedOn() {
+        return lastUpdatedOn;
+    }
+
+    public void setLastUpdatedOn(Date lastUpdatedOn) {
+        this.lastUpdatedOn = lastUpdatedOn;
+    }
+}
+----
+
+As part of the create, or update methods, data stored in the JSON representation of a customer is de-serialied into these representation classes. They're then used to create and populate the contents of JPA objects, which are then persisted in the database.
+
+We adopt this segregation of concerns because customers and customer accounts are stored differently in the database (as separate tables, which we'll look at later). The customer representation however includes the financial account information as well, and thus, we need to control the serialization and de-serialization of JPA classes to a very fine extent. In this particular scenario, JPA classes are not suited for serialization into and desererialization from REST resource representations. There are other reasons, for using representation classes - they can be used to bypass cycles in the JPA object graph, that give a hard time to JSON serializers and de-serializers, but this is a secondary concern in this use case.
+
+The resource representations are converted to the corresponding JPA entities through the `fromDTO` methods, that return a newly created JPA object that may map to an existing record in a database table, depending on the presence of a matching object Id.
+
+The `Customer` JPA class is as follows:
+
+.src/main/java/org/jboss/examples/bankplus/customer/model/Customer.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.model;
+
+import javax.persistence.*;
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
+
+@Entity
+@XmlRootElement
+public class Customer implements Serializable {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+
+    @Version
+    @Column(name = "version")
+    private int version;
+
+    @Column
+    private String fullName;
+
+    @Column
+    private String mailingAddress;
+
+    @Column
+    private String emailAddress;
+
+    @Column
+    private String phoneNumber;
+
+    @Column
+    private String mobileNumber;
+
+    @OneToMany(fetch = FetchType.EAGER, cascade = CascadeType.ALL, mappedBy = "customer")
+    private Set<Contact> contacts = new HashSet<Contact>();
+
+    @OneToOne(fetch = FetchType.EAGER, cascade = CascadeType.ALL)
+    private CustomerAccount customerAccount;
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public void setId(final Long id) {
+        this.id = id;
+    }
+
+    public int getVersion() {
+        return this.version;
+    }
+
+    public void setVersion(final int version) {
+        this.version = version;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getMailingAddress() {
+        return mailingAddress;
+    }
+
+    public void setMailingAddress(String mailingAddress) {
+        this.mailingAddress = mailingAddress;
+    }
+
+    public String getEmailAddress() {
+        return emailAddress;
+    }
+
+    public void setEmailAddress(String emailAddress) {
+        this.emailAddress = emailAddress;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getMobileNumber() {
+        return mobileNumber;
+    }
+
+    public void setMobileNumber(String mobileNumber) {
+        this.mobileNumber = mobileNumber;
+    }
+
+    public Set<Contact> getContacts() {
+        return this.contacts;
+    }
+
+    public void setContacts(final Set<Contact> contacts) {
+        this.contacts = contacts;
+    }
+
+    public CustomerAccount getCustomerAccount() {
+        return this.customerAccount;
+    }
+
+    public void setCustomerAccount(final CustomerAccount customerAccount) {
+        this.customerAccount = customerAccount;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof Customer)) {
+            return false;
+        }
+        Customer other = (Customer) obj;
+        if (id != null) {
+            if (!id.equals(other.id)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((id == null) ? 0 : id.hashCode());
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        String result = getClass().getSimpleName() + " ";
+        if (fullName != null && !fullName.trim().isEmpty())
+            result += "fullName: " + fullName;
+        if (mailingAddress != null && !mailingAddress.trim().isEmpty())
+            result += ", mailingAddress: " + mailingAddress;
+        if (emailAddress != null && !emailAddress.trim().isEmpty())
+            result += ", emailAddress: " + emailAddress;
+        if (phoneNumber != null && !phoneNumber.trim().isEmpty())
+            result += ", phoneNumber: " + phoneNumber;
+        if (mobileNumber != null && !mobileNumber.trim().isEmpty())
+            result += ", mobileNumber: " + mobileNumber;
+        return result;
+    }
+}
+----
+
+Note the presence of additional attributes like `contacts` that are not present in the Customer resource representation - this is the extent to which we want to control the content of the on-the-wire representation.
+
+Now, let's create the `CustomerAccount` class, which is simply used to store the mapping between the `Customer` and the actual financial account, that would be managed by a different component. The separate mapping class exists because we are not allowed to store and manage the financial account in the customer component, by the business architecture. If we eventually segregate the financial accounting into a separate Maven module or project, or for that matter replace it with a different system altogether, this segregation of concerns would come in handy. Let's look at the structure of the class:
+
+.src/main/java/org/jboss/examples/bankplus/customer/model/CustomerAccount.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.model;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+
+import javax.persistence.*;
+
+@Entity
+public class CustomerAccount {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @Version
+    @Column(name = "version")
+    private int version;
+
+    public int getVersion() {
+        return this.version;
+    }
+
+    public void setVersion(final int version) {
+        this.version = version;
+    }
+
+    private String iban;
+
+    public String getIban() {
+        return iban;
+    }
+
+    public void setIban(String iban) {
+        this.iban = iban;
+    }
+
+    @OneToOne(mappedBy = "customerAccount")
+    private Customer customer;
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+    }
+
+    @OneToOne
+    private Account financialAccount;
+
+    public Account getFinancialAccount() {
+        return financialAccount;
+    }
+
+    public void setFinancialAccount(Account financialAccount) {
+        this.financialAccount = financialAccount;
+    }
+}
+----
+
+It's quite simple - it stores a reference to the Customer, and another reference to the financial account. The IBAN that identifies every customer account is also stored in this class.
+
+For the sake of completeness, we'll stub the `Contact` JPA class that was referenced above, and we'll fill them up the services we create now for the user story will not utilize these classes until later:
+
+.src/main/java/org/jboss/examples/bankplus/customer/model/Contact.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.model;
+
+import javax.persistence.*;
+import java.io.Serializable;
+import java.lang.Override;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@Entity
+@XmlRootElement
+public class Contact implements Serializable {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+    @Version
+    @Column(name = "version")
+    private int version;
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public void setId(final Long id) {
+        this.id = id;
+    }
+
+    public int getVersion() {
+        return this.version;
+    }
+
+    public void setVersion(final int version) {
+        this.version = version;
+    }
+}
+----
+
+The reason why we stub this class for now, is because we don't want to start exploring other user stories in tandem, and lose focus of the user story. At the risk of repetition, in the real world, multiple teams may work on the user stories, and thus the JPA model classes constructed by one team for their component may be borrowed by other teams that depend on it.
+
+We're now in a position to write the stateless EJB-based 'service' class that would perform the actual CRUD operations for the `Customer` JPA entity:
+
+.src/main/java/org/jboss/examples/bankplus/customer/services/CustomerService.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.services;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.*;
+import java.math.BigDecimal;
+import java.util.List;
+
+@Stateless
+public class CustomerService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Currencies currencies;
+
+    @Inject
+    private CustomerAccounts customerAccounts;
+
+    public Customer create(CustomerDTO dto) {
+        Customer customer = dto.fromDTO(null, em);
+        Currency USD = currencies.findByCode("USD");
+        CustomerAccount customerAccount = customerAccounts.create("Customer account for " + customer.getFullName(), new Money(USD, BigDecimal.ZERO));
+        customer.setCustomerAccount(customerAccount);
+        customerAccount.setCustomer(customer);
+        em.persist(customer);
+        return customer;
+    }
+
+    public boolean delete(Long id) {
+        Customer entity = em.find(Customer.class, id);
+        if (entity == null) {
+            return false;
+        }
+        em.remove(entity);
+        return true;
+    }
+
+    public Customer findById(Long id) {
+        TypedQuery<Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE c.id = :entityId ORDER BY c.id", Customer.class);
+        findByIdQuery.setParameter("entityId", id);
+        Customer entity;
+        try {
+            entity = findByIdQuery.getSingleResult();
+        } catch (NoResultException nre) {
+            entity = null;
+        }
+        return entity;
+    }
+
+    public List<Customer> listAll(Integer startPosition, Integer maxResult, String email) {
+        TypedQuery<Customer> findAllQuery = null;
+        if (email == null || email.isEmpty()) {
+            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount ORDER BY c.id", Customer.class);
+        } else {
+            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE LOWER(c.emailAddress) = :emailAddress ORDER BY c.id", Customer.class);
+            findAllQuery.setParameter("emailAddress", email.toLowerCase());
+        }
+        if (startPosition != null) {
+            findAllQuery.setFirstResult(startPosition);
+        }
+        if (maxResult != null) {
+            findAllQuery.setMaxResults(maxResult);
+        }
+        final List<Customer> searchResults = findAllQuery.getResultList();
+        return searchResults;
+    }
+
+    public Customer update(CustomerDTO dto) {
+        Customer entity = em.find(Customer.class, dto.getId());
+        if (entity == null) {
+            return null;
+        }
+        entity = dto.fromDTO(entity, em);
+        try {
+            entity = em.merge(entity);
+        } catch (OptimisticLockException e) {
+            throw new CustomerUpdateException("The entity was updated in a different transaction", e);
+        }
+        return entity;
+    }
+
+}
+----
+
+For the most part, the class is quite simple - it contains logic to
+
+* perist a new Customer if it does not already exist
+* delete an existing Customer when provided with a valid customer Id
+* fetch an existing Customer when provided with a valid customer Id
+* fetch all Customers
+* update an existing Customer
+
+Some of the work to create a new Customer is delegated to a `CustomerAccounts` service - this is meant to create a new financial account when a new customer is created, and link the financial account with the customer through a CustomerAccount. But since we don't have the accounting module ready, we'll defer setting up the linkage for now. Let's take a look at this service:
+
+.src/main/java/org/jboss/examples/bankplus/customer/services/CustomerAccounts.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.services;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.customer.iban.USIban;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import java.util.List;
+
+@Stateless
+public class CustomerAccounts {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Accounts accounts;
+
+
+    public CustomerAccount findByIBAN(String iban) {
+        TypedQuery<CustomerAccount> findByIBANQuery = em.createQuery("SELECT DISTINCT c FROM CustomerAccount c WHERE c.iban = :iban ORDER BY c.id", CustomerAccount.class);
+        findByIBANQuery.setParameter("iban", iban);
+        CustomerAccount customerAccount;
+        try {
+            customerAccount = findByIBANQuery.getSingleResult();
+        } catch (NoResultException nre) {
+            customerAccount = null;
+        }
+        return customerAccount;
+    }
+
+    public CustomerAccount create(String name, Money openingBalance) {
+        Account liabilitiesAccount = accounts.getLiabilitiesAccount();
+        if(liabilitiesAccount == null) {
+            throw new CustomerAccountException("Failed to find a parent Liabilities account for the customer account.");
+        }
+        Account financialAccount = accounts.newAccount(null, name, AccountType.LIABILITY, liabilitiesAccount, openingBalance);
+        Long id = financialAccount.getId();
+        String accountId = String.format("2%019d", id);
+
+        String iban = new USIban.Builder()
+                .bankCode("PLUS")
+                .accountNumber(accountId)
+                .build()
+                .toFormattedString();
+        CustomerAccount customerAccount = new CustomerAccount();
+        customerAccount.setFinancialAccount(financialAccount);
+        customerAccount.setIban(iban);
+        em.persist(customerAccount);
+        return customerAccount;
+    }
+
+    public List<CustomerAccount> listAll() {
+        TypedQuery<CustomerAccount> findAllQuery = em.createQuery("SELECT DISTINCT c FROM CustomerAccount c ORDER BY c.id", CustomerAccount.class);
+        return findAllQuery.getResultList();
+    }
+}
+----
+
+For now, the `CustomerAccounts` service is quite simple. It has a method to create a new `CustomerAccount` - notice how a new financial account is created at the same time. The financial account created is a child of the Liabilities account head in the bank; the account Id specified for the financial account is of format 2xxxxxxxxY, where x is zero-ed out, followed by the auto-generated account Id. This is just a very simple scheme to generate an Id for every customer-linked financial account - it starts with '2' to indicate it is a liability type account, and is appended with the auto-generated database Id to ensure uniqueness. The account IBAN is also generated in a similar way, using the account Id (and hence database generated Id) as the base, again to ensure uniqueness.
+
+The `CustomerAccounts` class also has methods to find a `CustomerAccount` by it's unqiue IBAN (we'll eventually use this later), and a method to list all `CustomerAccount` instances.
+
+The `CustomerAccounts` class, relies on a `USIban` class to create IBAN numbers. In our application, we'll use the same scheme as IBANs in the real world, that cater to the ISO 13616:2007 standard. Since, the US is not on this standard, we'll mock up this functionality to create IBANs for our fictitious US based bank, using the `USIban` class:
+
+.src/main/java/org/jboss/examples/bankplus/customer/iban/USIban.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.iban;
+
+import org.apache.commons.validator.routines.checkdigit.CheckDigitException;
+
+import java.util.Locale;
+
+import static org.apache.commons.validator.routines.checkdigit.IBANCheckDigit.IBAN_CHECK_DIGIT;
+
+public class USIban {
+
+    public static final String DEFAULT_CHECK_DIGIT = "00";
+    private final String value;
+
+    private USIban(final String value) {
+        StringBuffer sb = new StringBuffer();
+        /* Convert the paper or display formatted value of IBAN numbers to the normal form */
+        for(Character ch: value.toCharArray()) {
+            if(Character.isLetterOrDigit(ch)) {
+                sb.append(ch);
+            }
+        }
+        this.value = sb.toString();
+    }
+
+    public String toFormattedString() {
+        final StringBuilder ibanBuffer = new StringBuilder(value);
+        final int length = ibanBuffer.length();
+
+        for (int i = 0; i < length / 4; i++) {
+            ibanBuffer.insert((i + 1) * 4 + i, ' ');
+        }
+
+        return ibanBuffer.toString().trim();
+    }
+
+    public boolean isValid() {
+        return IBAN_CHECK_DIGIT.isValid(value);
+    }
+
+    public static final class Builder {
+
+        private String bankCode;
+        private String accountNumber;
+
+        public Builder bankCode(final String bankCode) {
+            this.bankCode = bankCode;
+            return this;
+        }
+
+        public Builder accountNumber(final String accountNumber) {
+            this.accountNumber = accountNumber;
+            return this;
+        }
+
+        public USIban build() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(Locale.US.getCountry());
+            sb.append(DEFAULT_CHECK_DIGIT);
+            sb.append(bankCode);
+            sb.append(accountNumber);
+            String iban = sb.toString();
+            try {
+                return new USIban(iban.substring(0,2) + IBAN_CHECK_DIGIT.calculate(iban) + iban.substring(4));
+            } catch (CheckDigitException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+}
+----
+
+Apache Commons Validator is used to validate whether a supplied IBAN is a valid IBAN by the standard, or not.
+
+Finally, to wrap up the classes on the side of the backend, let's write up the exception classes that are utilized by these services:
+
+.src/main/java/org/jboss/examples/bankplus/customer/services/CustomerAccountException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.services;
+
+import org.jboss.examples.bankplus.core.exception.BusinessException;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class CustomerAccountException extends BusinessException {
+
+    public CustomerAccountException() {
+        super();
+    }
+
+    public CustomerAccountException(String message) {
+        super(message);
+    }
+
+    public CustomerAccountException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public CustomerAccountException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/customer/services/CustomerUpdateException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.services;
+
+import org.jboss.examples.bankplus.core.exception.BusinessException;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class CustomerUpdateException extends BusinessException {
+
+    public CustomerUpdateException() {
+        super();
+    }
+
+    public CustomerUpdateException(String message) {
+        super(message);
+    }
+
+    public CustomerUpdateException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public CustomerUpdateException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+
+==== Creating the KeyCloak broker
+
+In order to manage users in BankPlus and KeyCloak, we need to link KeyCloak users on registration in the BankPlus realm, with customers in the BankPlus backend. This would ensure that users would register themselves with the SSO application (KeyCloak), following which the linkage with their identity would be established in BankPlus. KeyCloak continues to manage the users, but we do not want to link the KeyCloak identity to store properies like the financial account details. Neither do we want various components of BankPlus to query an infrastructural component like KeyCloak for customer information, as this is functionally handled by the customer service in the business architecture.
+
+We therefore create a BankPlus-KeyCloak broker that would listen on user authentication and registration events in KeyCloak through an event listener, and then establish the linkage with a customer in BankPlus by creating the customer in BankPlus. The linkage is done through the e-mail property of the user (hence, why we chose email as username when we created the BankPlus realm).
+
+All KeyCloak event listeners implement `EventListenerProviderFactory` and `EventListenerProvider` interfaces, along with a declaration of the `EventListenerProviderFactory`in the `META-INF/services/org.keycloak.events.EventListenerProviderFactory` file.
+
+Let us create a new project to house the BankPlus-KeyCloak broker:
+
+.pom.xml
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.jboss.examples.bankplus</groupId>
+    <artifactId>keycloak-provider</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <apache.httpcomponents.version>4.3.6</apache.httpcomponents.version>
+        <javax.json.api>1.0</javax.json.api>
+        <keycloak.version>1.5.0.Final</keycloak.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-core</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-model-api</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-events-api</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-connections-http-client</artifactId>
+            <version>${keycloak.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <scope>provided</scope>
+            <version>${apache.httpcomponents.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.json</groupId>
+            <artifactId>javax.json-api</artifactId>
+            <version>${javax.json.api}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>keycloak-provider</finalName>
+    </build>
+
+</project>
+----
+
+The `keycloak-core`, `keycloak-events-api` and `keycloak-model-api` provide the interfaces that need to be implemented. The `javax.json-api`, `keycloak-connections-http-client` and `httpclient` projects are utilized by the project to communciate with the BankPlus REST API to establish the customer linkage.
+
+Implement the `BankplusEventListenerProviderFactory`:
+
+.src/main/java/org/jboss/examples/bankplus/keycloak/providers/BankplusEventListenerProviderFactory.java
+[source,java]
+----
+package org.jboss.examples.bankplus.keycloak.providers;
+
+import org.keycloak.Config;
+import org.keycloak.events.EventListenerProvider;
+import org.keycloak.events.EventListenerProviderFactory;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.KeycloakSessionFactory;
+
+public class BankplusEventListenerProviderFactory implements EventListenerProviderFactory {
+
+    @Override
+    public EventListenerProvider create(KeycloakSession session) {
+        return new BankplusEventListenerProvider(session);
+    }
+
+    @Override
+    public void init(Config.Scope config) {
+
+    }
+
+    @Override
+    public void postInit(KeycloakSessionFactory factory) {
+
+    }
+    @Override
+    public void close() {
+    }
+
+    @Override
+    public String getId() {
+        return "BankPlus-Broker";
+    }
+}
+----
+
+Note the `Id` specified in the above class as `BankPlus-Broker`. We'll use this Id to distinguish the event listener from other KeyCloak providers, when registering it in the BankPlus realm.
+
+Implement the `BankplusEventListenerProvider`, where we listen to the events published by KeyCloak. Specifically, we listen for login via KeyCloak, login via a third-party service (like Facebook, Google Plus or Twitter), and for registration events. We ignore other events as we are not interested in them. Then we verify if the corresponding customer with a matching email exists in BankPlus. If such a customer exists, we continue on with the authentication flow. If a matching customer does not exist, we attempt to register one in BankPlus. A failure in verifying the customer presence, or in creating a customer on missing linkage, would be treated as an authentication failure, and the SSO session would be closed.
+
+We utilize the REST resources we created above to verify the presence of customers and to create one if absent.
+
+.src/main/java/org/jboss/examples/bankplus/keycloak/providers/BankplusEventListenerProvider.java
+[source,java]
+----
+package org.jboss.examples.bankplus.keycloak.providers;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.keycloak.connections.httpclient.HttpClientBuilder;
+import org.keycloak.events.Event;
+import org.keycloak.events.EventListenerProvider;
+import org.keycloak.events.EventType;
+import org.keycloak.events.admin.AdminEvent;
+import org.keycloak.models.*;
+import org.keycloak.util.KeycloakUriBuilder;
+
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
+import java.io.IOException;
+
+public class BankplusEventListenerProvider implements EventListenerProvider {
+
+    private final KeycloakSession session;
+    private RealmProvider model;
+
+    public BankplusEventListenerProvider(KeycloakSession session) {
+        this.session = session;
+        this.model = session.realms();
+    }
+
+    @Override
+    public void onEvent(Event event) {
+
+        // Listen only for registration and login events.
+        // Both KeyCloak and Social logins are supported.
+        if (event.getType() == EventType.REGISTER || event.getType() == EventType.LOGIN || event.getType() == EventType.IDENTITY_PROVIDER_LOGIN) {
+
+            if (event.getRealmId() != null && event.getUserId() != null) {
+                RealmModel realm = model.getRealm(event.getRealmId());
+                UserModel user = session.users().getUserById(event.getUserId(), realm);
+                if (user != null && user.getEmail() != null) {
+                    String fullName = user.getFirstName() + " " + user.getLastName();
+                    String email = user.getEmail();
+
+                    HttpClient client = new HttpClientBuilder()
+                            .disableTrustManager().build();
+
+                    try {
+                        // Query for the user in the BankPlus REST API
+                        HttpGet get = new HttpGet(
+                                KeycloakUriBuilder.fromUri("http://localhost:9080/bankplus")
+                                        .path("/rest/customers/").queryParam("email", email).build());
+                        HttpResponse isUserRegisteredResponse = client.execute(get);
+                        if (isUserRegisteredResponse.getStatusLine().getStatusCode() != 200) {
+                            // Possible failure? Close the KeyCloak session
+                            // This prevents the user from accessing the application if there is an error during on-boarding.
+                            UserSessionModel userSession = session.sessions().getUserSession(realm, event.getSessionId());
+                            session.sessions().removeUserSession(realm, userSession);
+                            throw new RuntimeException("Failed : HTTP error code : "
+                                    + isUserRegisteredResponse.getStatusLine().getStatusCode());
+                        }
+
+                        // If the user does not exist, then create it through the API
+                        JsonReader reader = Json.createReader(isUserRegisteredResponse.getEntity().getContent());
+                        JsonArray customers = reader.readArray();
+                        if (customers.isEmpty()) {
+
+                            HttpPost post = new HttpPost(
+                                    KeycloakUriBuilder.fromUri("http://localhost:9080/bankplus")
+                                            .path("/rest/customers/").build());
+
+                            JsonObject customer = Json.createObjectBuilder()
+                                    .add("fullName", fullName)
+                                    .add("emailAddress", email)
+                                    .build();
+
+                            StringEntity input = new StringEntity(customer.toString());
+                            input.setContentType("application/json");
+                            post.setEntity(input);
+
+                            HttpResponse userCreatedResponse = client.execute(post);
+
+                            if (userCreatedResponse.getStatusLine().getStatusCode() != 201) {
+                                // Possible failure? Close the KeyCloak session
+                                // This prevents the user from accessing the application if there is an error during on-boarding.
+                                UserSessionModel userSession = session.sessions().getUserSession(realm, event.getSessionId());
+                                session.sessions().removeUserSession(realm, userSession);
+                                throw new RuntimeException("Failed : HTTP error code : "
+                                        + userCreatedResponse.getStatusLine().getStatusCode());
+                            }
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        client.getConnectionManager().shutdown();
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onEvent(AdminEvent adminEvent, boolean b) {
+        // Do nothing
+    }
+
+    @Override
+    public void close() {
+        // Do nothing
+    }
+}
+----
+
+And finally, register the `BankplusEventListenerProviderFactory` in the SPI file:
+
+.src/main/resources/META-INF/services/org.keycloak.events.EventListenerProviderFactory
+[source,text]
+----
+org.jboss.examples.bankplus.keycloak.providers.BankplusEventListenerProviderFactory
+----
+
+
+==== Setting up the KeyCloak broker
+
+Once you have completed the construction of the KeyCloak broker, you can proceed to install it.
+
+To do so, first build the BankPlus-KeyCloak broker project:
+
+----
+mvn clean package
+----
+
+Now, install the BankPlus-KeyCloak broker as a JBoss module in KeyCloak. Create a directory `KEYCLOAK_HOME/modules/org/jboss/examples/bankplus/main` and copy the `keycloak-provider.jar` created in the above build, to the directory. Then create a `module.xml` file with the following entries:
+
+.module.xml
+[source,xml]
+----
+<?xml version="1.0" ?>
+
+<module xmlns="urn:jboss:module:1.1" name="org.jboss.examples.bankplus">
+
+    <resources>
+        <resource-root path="keycloak-provider.jar"/>
+    </resources>
+
+    <dependencies>
+        <module name="org.keycloak.keycloak-core"/>
+        <module name="org.keycloak.keycloak-model-api"/>
+        <module name="org.keycloak.keycloak-events-api"/>
+        <module name="javax.json.api"/>
+        <module name="org.keycloak.keycloak-connections-http-client" services="import"/>
+        <module name="org.apache.httpcomponents"/>
+    </dependencies>
+</module>
+----
+
+Once the module structure has been created, register the module with KeyCloak. Open `keycloak-server.json` in the KeyCloak installation, and add it as a provider:
+
+.keycloak-server.json
+[source,json]
+----
+{
+    "providers": [
+        "classpath:${jboss.server.config.dir}/providers/*",
+        "module:org.jboss.examples.bankplus"
+    ],
+    
+    ...
+}
+----
+
+The provder is now registered, but it should also be enabled for the BankPlus realm. Open the KeyCloak administration console, browse to the BankPlus realm:
+
+* Open the `Events` tab on the left, to manage how events would be handled
+* Open the `Config` tab, and add `BankPlus-broker` to the list of event listeners.
+
+The listener is activated on the BankPlus realm, and will listen for all events of type `LOGIN`, `REGISTER` and `IDENTITY_PROVIDER_LOGIN` on this realm. As defined in it's behavior, the provider will determine whether the user associated with the user authentication or registration event is present as a customer of BankPlus and will proceed to create the customer. If the creation of the customer fails in BankPlus, the associated KeyCloak session would be closed and further access into the system would be prevented.
+
+Once everything is setup, we are in a position to verify whether a customer is registered in BankPlus, on initial login to the application. You will also notice that a financial account with zero balance, has been created and linked in BankPlus, as visible in the dashboard. The created account also has an associated IBAN that can be used by other users in the banking network to make payments. Obviously, other users in BankPlus, can now add this user as a contact, to make payments. But let's not get ahead of ourselves, for we have to implement those user stories first.
+
+==== Creating, editing and viewing contacts
+
+We'll now implement the required functionality in the backend, for the following user stories:
+
+[NOTE]
+====
+As a registered user, I would be able to add unqiuely identifiable contacts to my contacts database for the purpose of making outgoing transfers.
+====
+
+[NOTE]
+====
+As a registered user, I would be able to view all my contacts in the contacts database.
+====
+
+[NOTE]
+====
+As a registered user, I would be able to edit a contact in the contacts database.
+====
+
+Let's first fix up the `Contact` JPA entity:
+
+.src/main/java/org/jboss/examples/bankplus/customer/model/Contact.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.model;
+
+import javax.persistence.*;
+import java.io.Serializable;
+import java.lang.Override;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@Entity
+@XmlRootElement
+public class Contact implements Serializable {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "id", updatable = false, nullable = false)
+    private Long id;
+    @Version
+    @Column(name = "version")
+    private int version;
+
+    @Column
+    private String fullName;
+
+    @Column
+    private String iban;
+
+    @ManyToOne
+    private Customer customer;
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public void setId(final Long id) {
+        this.id = id;
+    }
+
+    public int getVersion() {
+        return this.version;
+    }
+
+    public void setVersion(final int version) {
+        this.version = version;
+    }
+
+    @Override
+    public String toString() {
+        String result = getClass().getSimpleName() + " ";
+        if (id != null)
+            result += "id: " + id;
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!(obj instanceof Contact)) {
+            return false;
+        }
+        Contact other = (Contact) obj;
+        if (iban != null) {
+            if (!iban.equals(other.iban)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((iban == null) ? 0 : iban.hashCode());
+        return result;
+    }
+
+    public String getFullName()
+    {
+        return fullName;
+    }
+
+    public void setFullName(String fullName)
+    {
+        this.fullName = fullName;
+    }
+
+    public String getIban()
+    {
+        return iban;
+    }
+
+    public void setIban(String iban)
+    {
+        this.iban = iban;
+    }
+
+    public Customer getCustomer()
+    {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer)
+    {
+        this.customer = customer;
+    }
+}
+----
+
+Then, let's create the required sub-resource at the `/customers/:customerId/contacts` URL in the previously created `CustomerResource` class:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/CustomerResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.reporting.rest.ReportsResource;
+import org.jboss.examples.bankplus.customer.services.CustomerService;
+import org.jboss.examples.bankplus.customer.services.CustomerUpdateException;
+import org.jboss.examples.bankplus.transactions.rest.DepositsResource;
+import org.jboss.examples.bankplus.transactions.rest.PaymentsResource;
+import org.jboss.examples.bankplus.transactions.rest.WithdrawalsResource;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriBuilder;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ *
+ */
+@Stateless
+@Path("/customers")
+public class CustomerResource {
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @Inject
+    private ContactResource contactResource;
+
+    @Inject
+    private CustomerService customerService;
+
+    @Context
+    private HttpServletRequest httpRequest;
+
+    @POST
+    @Consumes("application/json")
+    @Produces("application/json")
+    public Response create(CustomerDTO dto) {
+        Customer customer = customerService.create(dto);
+        return Response.created(UriBuilder.fromResource(CustomerResource.class).path(String.valueOf(customer.getId())).build())
+                .entity(new CustomerDTO(customer))
+                .build();
+    }
+
+    @DELETE
+    @Path("/{id:[0-9][0-9]*}")
+    public Response deleteById(@PathParam("id") Long id) {
+        boolean deleted = customerService.delete(id);
+        if (deleted) {
+            return Response.noContent()
+                    .build();
+        } else {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/{id:[0-9][0-9]*}")
+    @Produces("application/json")
+    public Response findById(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+        CustomerDTO dto = new CustomerDTO(customer);
+        return Response.ok(dto)
+                .build();
+    }
+
+    @GET
+    @Produces("application/json")
+    public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult, @QueryParam("email") String email) {
+        List<Customer> searchResults = customerService.listAll(startPosition, maxResult, email);
+        final List<CustomerDTO> results = new ArrayList<CustomerDTO>();
+        for (Customer searchResult : searchResults) {
+            CustomerDTO dto = new CustomerDTO(searchResult);
+            results.add(dto);
+        }
+        return Response.ok(results)
+                .build();
+    }
+
+    @PUT
+    @Path("/{id:[0-9][0-9]*}")
+    @Consumes("application/json")
+    public Response update(@PathParam("id") Long id, CustomerDTO dto) {
+        if (dto == null) {
+            return Response.status(Status.BAD_REQUEST)
+                    .build();
+        }
+        if (!id.equals(dto.getId())) {
+            return Response.status(Status.CONFLICT).entity(dto)
+                    .build();
+        }
+        try {
+            Customer updatedCustomer = customerService.update(dto);
+            if (updatedCustomer == null) {
+                return Response.status(Status.NOT_FOUND)
+                        .build();
+            }
+            CustomerDTO responseDto = new CustomerDTO(updatedCustomer);
+            return Response.ok(responseDto)
+                    .build();
+        } catch (CustomerUpdateException e) {
+
+            return Response.status(Status.CONFLICT).entity(e.getMessage())
+                    .build();
+        }
+    }
+
+    @Path("/{id:[0-9][0-9]*}/contacts")
+    public ContactResource getContactResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return contactResource;
+    }
+
+}
+----
+
+The sub-resource method `getContactResource` that was added to fulfill this requirement, returns an instance of the sub-resource class `ContactResource`:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/ContactResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.ejb.Stateless;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.OptimisticLockException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriInfo;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.rest.dto.ContactDTO;
+import org.jboss.examples.bankplus.customer.model.Contact;
+
+/**
+ *
+ */
+@Stateless
+public class ContactResource {
+
+    @Context
+    private UriInfo uriInfo;
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @POST
+    @Consumes("application/json")
+    public Response create(ContactDTO dto) {
+        Contact entity = dto.fromDTO(null, em);
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        entity.setCustomer(customer);
+        customer.getContacts().add(entity);
+        em.merge(customer);
+        em.flush();
+        return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(entity.getId())).build())
+                .build();
+    }
+
+    @DELETE
+    @Path("/{id:[0-9][0-9]*}")
+    public Response deleteById(@PathParam("id") Long id) {
+        Contact entity = em.find(Contact.class, id);
+        if (entity == null) {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+        em.remove(entity);
+        return Response.noContent()
+                .build();
+    }
+
+    @GET
+    @Path("/{id:[0-9][0-9]*}")
+    @Produces("application/json")
+    public Response findById(@PathParam("id") Long id) {
+        TypedQuery<Contact> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.id = :entityId ORDER BY c.id", Contact.class);
+        findByIdQuery.setParameter("entityId", id);
+        Contact entity;
+        try {
+            entity = findByIdQuery.getSingleResult();
+        } catch (NoResultException nre) {
+            entity = null;
+        }
+        if (entity == null) {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+        ContactDTO dto = new ContactDTO(entity);
+        return Response.ok(dto)
+                .build();
+    }
+
+    @GET
+    @Produces("application/json")
+    public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
+        TypedQuery<Contact> findAllQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.customer = :customer ORDER BY c.id", Contact.class);
+        if (startPosition != null) {
+            findAllQuery.setFirstResult(startPosition);
+        }
+        if (maxResult != null) {
+            findAllQuery.setMaxResults(maxResult);
+        }
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        findAllQuery.setParameter("customer", customer);
+        final List<Contact> searchResults = findAllQuery.getResultList();
+        final List<ContactDTO> results = new ArrayList<ContactDTO>();
+        for (Contact searchResult : searchResults) {
+            ContactDTO dto = new ContactDTO(searchResult);
+            results.add(dto);
+        }
+        return Response.ok(results)
+                .build();
+    }
+
+    @PUT
+    @Path("/{id:[0-9][0-9]*}")
+    @Consumes("application/json")
+    public Response update(@PathParam("id") Long id, ContactDTO dto) {
+        if (dto == null) {
+            return Response.status(Status.BAD_REQUEST)
+                    .build();
+        }
+        if (!id.equals(dto.getId())) {
+            return Response.status(Status.CONFLICT).entity(dto)
+                    .build();
+        }
+        Contact entity = em.find(Contact.class, id);
+        if (entity == null) {
+            return Response.status(Status.NOT_FOUND)
+                    .build();
+        }
+        entity = dto.fromDTO(entity, em);
+        try {
+            entity = em.merge(entity);
+        } catch (OptimisticLockException e) {
+            return Response.status(Status.CONFLICT).entity(e.getEntity())
+                    .build();
+        }
+        ContactDTO updatedDTO = new ContactDTO(entity);
+        return Response.ok(updatedDTO)
+                .build();
+    }
+}
+----
+
+This class is similar in nature to the `CustomerResource` class, in how it supports CRUD operations, however on `Contact` instances in this case. The `ContactDTO` class stores the representation of contacts, as should be visible :
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/dto/ContactDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest.dto;
+
+import java.io.Serializable;
+
+import org.jboss.examples.bankplus.customer.model.Contact;
+
+import javax.persistence.EntityManager;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement
+public class ContactDTO implements Serializable {
+
+    private Long id;
+    private String fullName;
+    private String iban;
+
+    public ContactDTO() {
+    }
+
+    public ContactDTO(final Contact entity) {
+        if (entity != null) {
+            this.id = entity.getId();
+            this.fullName = entity.getFullName();
+            this.iban = entity.getIban();
+        }
+    }
+
+    public Contact fromDTO(Contact entity, EntityManager em) {
+        if (entity == null) {
+            entity = new Contact();
+        }
+        entity.setFullName(this.fullName);
+        entity.setIban(this.iban);
+        entity = em.merge(entity);
+        return entity;
+    }
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public void setId(final Long id) {
+        this.id = id;
+    }
+
+    public String getFullName() {
+        return this.fullName;
+    }
+
+    public void setFullName(final String fullName) {
+        this.fullName = fullName;
+    }
+
+    public String getIban() {
+        return this.iban;
+    }
+
+    public void setIban(final String iban) {
+        this.iban = iban;
+    }
+}
+----
+
+The `ContactDTO` representation merely stores the `Id`, `fullName` and `IBAN` of each contact. It contains the necessary logic to convert the representation to the `Contact` JPA entity, that is eventually managed by the methods in the `ContactResource` class.
+
+We've now created the required logic in the backend to create, update and view contacts for a user. Let's now proceed to implement the functionality to perform financial transactions.
+
+=== Deposits, Withdrawals and Payments
+
+Now that users can register in BankPlus, and create new contacts or edit existing ones, let's move onto the next set of user stories
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to deposit money into the provided account.
+====
+
+[NOTE]
+====
+As a registered user of the bank, I would be able to withdraw money from the provided account.
+====
+
+[NOTE]
+====
+As a registered user, I would be able to transfer money to a contact in denominations of USD to the specified account.
+====
+
+Create the required sub-resources at the `/customers/:customerId/deposits`, `/customers/:customerId/withdrawals` and `/customers/:customerId/payments` URLs in the previously created `CustomerResource` class:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/CustomerResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.reporting.rest.ReportsResource;
+import org.jboss.examples.bankplus.customer.services.CustomerService;
+import org.jboss.examples.bankplus.customer.services.CustomerUpdateException;
+import org.jboss.examples.bankplus.transactions.rest.DepositsResource;
+import org.jboss.examples.bankplus.transactions.rest.PaymentsResource;
+import org.jboss.examples.bankplus.transactions.rest.WithdrawalsResource;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriBuilder;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ *
+ */
+@Stateless
+@Path("/customers")
+public class CustomerResource {
+
+    ...
+
+    @Inject
+    private ContactResource contactResource;
+
+    @Inject
+    private DepositsResource depositsResource;
+
+    @Inject
+    private WithdrawalsResource withdrawalsResource;
+
+    @Inject
+    private PaymentsResource paymentsResource;
+
+    ...
+
+    @Path("/{id:[0-9][0-9]*}/deposits")
+    public DepositsResource getDepositsResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return depositsResource;
+    }
+
+    @Path("/{id:[0-9][0-9]*}/withdrawals")
+    public WithdrawalsResource getWithdrawalsResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return withdrawalsResource;
+    }
+
+    @Path("/{id:[0-9][0-9]*}/payments")
+    public PaymentsResource getPaymentsResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return paymentsResource;
+    }
+
+}
+----
+
+As usual, we create sub-resource locator methods in the `CustomerResource` class, and follow up to create the required sub-resource classes:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/DepositsResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.transactions.model.Deposit;
+import org.jboss.examples.bankplus.transactions.rest.dto.DepositDTO;
+import org.jboss.examples.bankplus.transactions.services.DepositService;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+
+@Stateless
+public class DepositsResource {
+
+    @Context
+    private UriInfo uriInfo;
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @Inject
+    private DepositService depositService;
+
+    @POST
+    @Consumes("application/json")
+    public Response create(DepositDTO dto) {
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        Deposit deposit = depositService.newDeposit(customer, dto.getAmount());
+        return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(deposit.getId())).build())
+                .build();
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/WithdrawalsResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.transactions.model.Withdrawal;
+import org.jboss.examples.bankplus.transactions.rest.dto.WithdrawalDTO;
+import org.jboss.examples.bankplus.transactions.services.WithdrawalService;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+
+@Stateless
+public class WithdrawalsResource {
+
+    @Context
+    private UriInfo uriInfo;
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @Inject
+    private WithdrawalService withdrawalService;
+
+    @POST
+    @Consumes("application/json")
+    public Response create(WithdrawalDTO dto) {
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        Withdrawal withdrawal = withdrawalService.newWithdrawal(customer, dto.getAmount());
+        return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(withdrawal.getId())).build())
+                .build();
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/PaymentsResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest;
+
+import org.jboss.examples.bankplus.customer.model.Contact;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.transactions.model.Payment;
+import org.jboss.examples.bankplus.transactions.rest.dto.PaymentDTO;
+import org.jboss.examples.bankplus.transactions.services.PaymentException;
+import org.jboss.examples.bankplus.transactions.services.PaymentService;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+
+@Stateless
+public class PaymentsResource {
+
+    @Context
+    private UriInfo uriInfo;
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @Inject
+    private PaymentService paymentService;
+
+    @POST
+    @Consumes("application/json")
+    public Response create(PaymentDTO dto) {
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer from = em.find(Customer.class, customerId);
+        Long payeeId = dto.getPayeeId();
+        if(payeeId == null) {
+            throw new PaymentException("Contact was not specified.");
+        }
+        Contact to = em.find(Contact.class, payeeId);
+        if(to == null) {
+            throw new PaymentException("Contact was not specified.");
+        }
+        Payment payment = paymentService.newOutgoingPayment(from, to, dto.getAmount());
+        return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(payment.getId())).build())
+                .build();
+    }
+}
+----
+
+Unlike other sub-resource classes that we previously created, these set of classes only implement the logic to support HTTP POST. In other words, only creation of deposit, withdrawal and payment resources is possible. Updates to these resources are disallowed, as the transactions are immutable once created.
+
+Let's take a look at the representation classes for the resources:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/dto/DepositDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest.dto;
+
+import org.jboss.examples.bankplus.transactions.model.Deposit;
+
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.math.BigDecimal;
+
+@XmlRootElement
+public class DepositDTO implements Serializable {
+
+    private BigDecimal amount;
+
+    public DepositDTO() {
+    }
+
+    public DepositDTO(final Deposit entity) {
+        if (entity != null) {
+            this.amount = entity.getDepositAmount().getAmount();
+        }
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/dto/WithdrawalDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest.dto;
+
+import org.jboss.examples.bankplus.transactions.model.Withdrawal;
+
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.math.BigDecimal;
+
+@XmlRootElement
+public class WithdrawalDTO implements Serializable {
+
+    private BigDecimal amount;
+
+    public WithdrawalDTO() {
+    }
+
+    public WithdrawalDTO(final Withdrawal entity) {
+        if (entity != null) {
+            this.amount = entity.getWithdrawalAmount().getAmount();
+        }
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/rest/dto/PaymentDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.rest.dto;
+
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.math.BigDecimal;
+
+@XmlRootElement
+public class PaymentDTO implements Serializable {
+
+    private BigDecimal amount;
+    private Long payeeId;
+
+    public PaymentDTO() {
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public Long getPayeeId() {
+        return payeeId;
+    }
+
+    public void setPayeeId(Long payeeId) {
+        this.payeeId = payeeId;
+    }
+}
+----
+
+As you can see, the REST client needs to only specify how much money ought to be deposited or withdrawn in either case. In the case of payments, the Id of the contact in the per-user contact database, and the amount to be transferred should be specified in the request made by the client.
+
+We now move on to see how the underlying services utilized by the sub-resource classes are implemented: 
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/DepositService.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.accounting.model.PostingStatus;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.accounting.services.Journal;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.transactions.model.Deposit;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+@Stateless
+public class DepositService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Currencies currencies;
+
+    @Inject
+    private Accounts accounts;
+
+    @Inject
+    private Journal journal;
+
+    public Deposit newDeposit(Customer to, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new DepositException("A positive amount should be specified for deposits.");
+        }
+        Deposit deposit = new Deposit();
+        deposit.setDepositor(to);
+        deposit.setDateTime(new Date());
+        Currency USD = currencies.findByCode("USD");
+        deposit.setDepositAmount(new Money(USD, amount));
+        postJournalEntries(deposit);
+        em.persist(deposit);
+        // Can be moved off into a batch
+        journal.postToLedger(deposit.getJournalEntries());
+        return deposit;
+    }
+
+    private void postJournalEntries(Deposit deposit) {
+        Account depositorAccount = deposit.getDepositor().getCustomerAccount().getFinancialAccount();
+        Account cashAccount = accounts.getCashAccount();
+        if(cashAccount == null) {
+            throw new DepositException("Failed to find a Cash account in the system.");
+        }
+        final JournalEntry creditEntry = new JournalEntry();
+        creditEntry.setAccount(depositorAccount);
+        creditEntry.setType(EntryType.CREDIT);
+        creditEntry.setAmount(deposit.getDepositAmount());
+        creditEntry.setDateTime(deposit.getDateTime());
+        creditEntry.setFinancialEvent(deposit);
+        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry debitEntry = new JournalEntry();
+        debitEntry.setType(EntryType.DEBIT);
+        debitEntry.setAccount(cashAccount);
+        debitEntry.setAmount(deposit.getDepositAmount());
+        debitEntry.setDateTime(deposit.getDateTime());
+        debitEntry.setFinancialEvent(deposit);
+        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(debitEntry);
+        journalEntries.add(creditEntry);
+        String description = "Deposit: " + deposit.getDepositAmount().getCurrency().getCurrencyCode() + " " + deposit.getDepositAmount().getAmount()
+                + " to account by " + deposit.getDepositor().getFullName();
+
+        deposit.setDescription(description);
+        deposit.setJournalEntries(journalEntries);
+    }
+
+}
+----
+
+The `DepositService` creates a new `Deposit` based on the `Customer` whose account would be deposited with some `Money`. It creates the necessary journal entries when persisting the financial transaction, and then eventually posts these journal entries to the ledger. The service creates the following journal entries -
+
+* A debit entry to Bank's cash account, with the amount equivalent to the deposited amount. The debit entry to the cash account indicates that money is added to the cash account, as a result of a physical transfer made by the customer. During a deposit, the cash does not move anywhere; at a later point in time, it may be moved to the vault of the bank in a different transaction, so this debit entry records which asset account has received the money.
+* A credit entry to the customer's account, with the amount equivalent to the deposited amount. The customer's account balance also has to increase by the same amount as deposited. No physical transfer of cash occurs into this account - cash is moved into the cash account of the bank and stays there. The credit entry is made though to recognize the fact that the increase in the cash account also simultaneously increases the obligation of the bank to pay the customer back, and hence a credit entry is made.
+
+Obviously, this operation of posting to the journal also increases the balance of the account into which money is deposited.
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/WithdrawalService.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.accounting.model.PostingStatus;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.accounting.services.Journal;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.transactions.model.Withdrawal;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+@Stateless
+public class WithdrawalService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Currencies currencies;
+
+    @Inject
+    private Accounts accounts;
+
+    @Inject
+    private Journal journal;
+
+    public Withdrawal newWithdrawal(Customer from, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new WithdrawalException("A positive amount should be specified for withdrawal.");
+        }
+        Currency USD = currencies.findByCode("USD");
+        Money withdrawalAmount = new Money(USD, amount);
+        if(from.getCustomerAccount().getFinancialAccount().getCurrentBalance().compareTo(withdrawalAmount) == -1) {
+            throw new WithdrawalException("Insufficient balance in the account");
+        }
+
+        Withdrawal withdrawal = new Withdrawal();
+        withdrawal.setWithdrawer(from);
+        withdrawal.setDateTime(new Date());
+        withdrawal.setWithdrawalAmount(withdrawalAmount);
+        postJournalEntries(withdrawal);
+        em.persist(withdrawal);
+        // Can be moved off into a batch
+        journal.postToLedger(withdrawal.getJournalEntries());
+        return withdrawal;
+    }
+
+    private void postJournalEntries(Withdrawal withdrawal) {
+        Account withdrawalAccount = withdrawal.getWithdrawer().getCustomerAccount().getFinancialAccount();
+        Account cashAccount = accounts.getCashAccount();
+        if(cashAccount == null) {
+            throw new WithdrawalException("Failed to find a Cash account in the system.");
+        }
+        final JournalEntry creditEntry = new JournalEntry();
+        creditEntry.setAccount(cashAccount);
+        creditEntry.setType(EntryType.CREDIT);
+        creditEntry.setAmount(withdrawal.getWithdrawalAmount());
+        creditEntry.setDateTime(withdrawal.getDateTime());
+        creditEntry.setFinancialEvent(withdrawal);
+        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry debitEntry = new JournalEntry();
+        debitEntry.setType(EntryType.DEBIT);
+        debitEntry.setAccount(withdrawalAccount);
+        debitEntry.setAmount(withdrawal.getWithdrawalAmount());
+        debitEntry.setDateTime(withdrawal.getDateTime());
+        debitEntry.setFinancialEvent(withdrawal);
+        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(debitEntry);
+        journalEntries.add(creditEntry);
+
+        String description = "Withdrawal: " + withdrawal.getWithdrawalAmount().getCurrency().getCurrencyCode() + " " +  withdrawal.getWithdrawalAmount().getAmount()
+                + " to account by " + withdrawal.getWithdrawer().getFullName();
+
+        withdrawal.setDescription(description);
+        withdrawal.setJournalEntries(journalEntries);
+    }
+
+}
+----
+
+Similarly, the `WithdrawalService` creates a new `Withdrawal` based on the `Customer` from whose account the money would be withdrawn. It creates the necessary journal entries when persisting the financial transaction, and then eventually posts these journal entries to the ledger. The service creates the following journal entries -
+
+* A credit entry to Bank's cash account, with the amount equivalent to the withdrawal amount. This credit entry to the cash account indicates that money is removed from the cash account, as a result of transfer to the customer's wallet.
+* A debit entry to the customer's account, with the amount equivalent to the withdrawal amount. The customer's account balance also has to decrease by the same amount as withdrawn.
+
+Once, posted to the ledger, the customer's account balance would see a fall.
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/PaymentService.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.accounting.model.PostingStatus;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.accounting.services.Journal;
+import org.jboss.examples.bankplus.customer.model.Contact;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
+import org.jboss.examples.bankplus.messages.model.OutgoingPaymentMessage;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
+import org.jboss.examples.bankplus.transactions.model.Charge;
+import org.jboss.examples.bankplus.transactions.model.IncomingPayment;
+import org.jboss.examples.bankplus.transactions.model.Payment;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.logging.Logger;
+
+@Stateless
+public class PaymentService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Currencies currencies;
+
+    @Inject
+    private Accounts accounts;
+
+    @Inject
+    private CustomerAccounts customerAccounts;
+
+    @Inject
+    private Journal journal;
+
+    public Payment newOutgoingPayment(Customer from, Contact to, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new PaymentException("A positive amount should be specified for the payment.");
+        }
+        Currency USD = currencies.findByCode("USD");
+        Money chargeAmount = new Money(USD, amount.multiply(new BigDecimal("0.005")));
+        Money totalTransactionAmount = new Money(USD, amount).add(chargeAmount);
+        if(from.getCustomerAccount().getFinancialAccount().getCurrentBalance().compareTo(totalTransactionAmount) == -1) {
+            throw new PaymentException("Insufficient balance in the account");
+        }
+
+        Payment payment = new Payment();
+        payment.setPayer(from);
+        payment.setPayee(to);
+        payment.setDateTime(new Date());
+        payment.setPaymentAmount(new Money(USD, amount));
+        Charge chargesForPayment = new Charge();
+        chargesForPayment.setCollectedFrom(from.getCustomerAccount().getFinancialAccount());
+        chargesForPayment.setDateTime(new Date());
+        chargesForPayment.setChargeAmount(chargeAmount);
+        postJournalEntries(payment);
+        postJournalEntries(chargesForPayment, payment);
+        em.persist(payment);
+        em.persist(chargesForPayment);
+        // Can be moved off into a batch
+        journal.postToLedger(payment.getJournalEntries());
+        journal.postToLedger(chargesForPayment.getJournalEntries());
+        return payment;
+    }
+
+    public IncomingPayment newIncomingPayment(IncomingPaymentMessage incomingPaymentMessage) {
+        Currency USD = currencies.findByCode("USD");
+        CustomerAccount customerAccount = customerAccounts.findByIBAN(incomingPaymentMessage.getBeneficiary());
+        if(customerAccount == null) {
+            // TODO Post the payment message to a failed message queue.
+            // TODO How do institutions handle this?
+            Logger.getLogger(PaymentService.class.getName()).severe("Failed to find customer account");
+            return null;
+        }
+        Customer to = customerAccount.getCustomer();
+
+        IncomingPayment payment = new IncomingPayment();
+        payment.setPayer(incomingPaymentMessage.getOrderingCustomer());
+        payment.setPayee(to);
+        payment.setDateTime(new Date());
+        Money paymentAmount = incomingPaymentMessage.getAmount();
+        Money chargeAmount = new Money(USD, paymentAmount.getAmount().multiply(new BigDecimal("0.005")));
+        payment.setPaymentAmount(paymentAmount);
+        Charge chargesForPayment = new Charge();
+        chargesForPayment.setCollectedFrom(customerAccount.getFinancialAccount());
+        chargesForPayment.setDateTime(new Date());
+        chargesForPayment.setChargeAmount(chargeAmount);
+        postJournalEntries(payment);
+        postJournalEntries(chargesForPayment, payment);
+
+        payment.setIncomingPaymentMessage(incomingPaymentMessage);
+
+        em.persist(payment);
+        em.persist(chargesForPayment);
+        em.persist(incomingPaymentMessage);
+        // Can be moved off into a batch
+        journal.postToLedger(payment.getJournalEntries());
+        journal.postToLedger(chargesForPayment.getJournalEntries());
+        return payment;
+    }
+
+    private void postJournalEntries(Payment payment) {
+        Money amount = payment.getPaymentAmount();
+        CustomerAccount internalCustomerAccount = customerAccounts.findByIBAN(payment.getPayee().getIban());
+        Account payeeAccount = null;
+        if(internalCustomerAccount == null) {
+            Account clearingAccount = accounts.getClearingAccount();
+            if(clearingAccount == null) {
+                throw new PaymentException("Failed to find a clearing house for the contact.");
+            } else {
+                payeeAccount = clearingAccount;
+                generatePaymentMessage(payment);
+            }
+        } else {
+            payeeAccount = internalCustomerAccount.getFinancialAccount();
+        }
+        Currency USD = currencies.findByCode("USD");
+
+        final JournalEntry creditEntry = new JournalEntry();
+        creditEntry.setAccount(payeeAccount);
+        creditEntry.setType(EntryType.CREDIT);
+        creditEntry.setAmount(amount);
+        creditEntry.setDateTime(payment.getDateTime());
+        creditEntry.setFinancialEvent(payment);
+        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry debitEntry = new JournalEntry();
+        debitEntry.setType(EntryType.DEBIT);
+        debitEntry.setAccount(payment.getPayer().getCustomerAccount().getFinancialAccount());
+        debitEntry.setAmount(amount);
+        debitEntry.setDateTime(payment.getDateTime());
+        debitEntry.setFinancialEvent(payment);
+        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(debitEntry);
+        journalEntries.add(creditEntry);
+
+        String description = "Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName();
+
+        payment.setDescription(description);
+        payment.setJournalEntries(journalEntries);
+    }
+
+    private void postJournalEntries(Charge chargesForPayment, Payment payment) {
+        Currency USD = currencies.findByCode("USD");
+        Money charges = chargesForPayment.getChargeAmount();
+        final JournalEntry chargesEntry = new JournalEntry();
+        chargesEntry.setType(EntryType.CREDIT);
+        chargesEntry.setAccount(accounts.getChargesAccount());
+        chargesEntry.setAmount(charges);
+        chargesEntry.setDateTime(chargesForPayment.getDateTime());
+        chargesEntry.setFinancialEvent(chargesForPayment);
+        chargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry deductChargesEntry = new JournalEntry();
+        deductChargesEntry.setType(EntryType.DEBIT);
+        deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
+        deductChargesEntry.setAmount(charges);
+        deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
+        deductChargesEntry.setFinancialEvent(chargesForPayment);
+        deductChargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(chargesEntry);
+        journalEntries.add(deductChargesEntry);
+
+        String description = "Service charge for Payment from " + payment.getPayer().getFullName() +
+                " to " + payment.getPayee().getFullName();
+
+        chargesForPayment.setDescription(description);
+        chargesForPayment.setJournalEntries(journalEntries);
+    }
+
+    private void postJournalEntries(IncomingPayment payment) {
+        Money amount = payment.getPaymentAmount();
+        Account payeeAccount = accounts.getClearingAccount();
+        if(payeeAccount == null) {
+            throw new PaymentException("Failed to find a clearing house for the contact.");
+        }
+        Currency USD = currencies.findByCode("USD");
+
+        final JournalEntry creditEntry = new JournalEntry();
+        creditEntry.setAccount(payment.getPayee().getCustomerAccount().getFinancialAccount());
+        creditEntry.setType(EntryType.CREDIT);
+        creditEntry.setAmount(amount);
+        creditEntry.setDateTime(payment.getDateTime());
+        creditEntry.setFinancialEvent(payment);
+        creditEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry debitEntry = new JournalEntry();
+        debitEntry.setType(EntryType.DEBIT);
+        debitEntry.setAccount(payeeAccount);
+        debitEntry.setAmount(amount);
+        debitEntry.setDateTime(payment.getDateTime());
+        debitEntry.setFinancialEvent(payment);
+        debitEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(debitEntry);
+        journalEntries.add(creditEntry);
+
+        String description = "Incoming payment from " + payment.getPayer() +
+                " to " + payment.getPayee().getFullName();
+
+        payment.setDescription(description);
+        payment.setJournalEntries(journalEntries);
+    }
+
+    private void postJournalEntries(Charge chargesForPayment, IncomingPayment payment) {
+        Currency USD = currencies.findByCode("USD");
+        Money charges = chargesForPayment.getChargeAmount();
+        final JournalEntry chargesEntry = new JournalEntry();
+        chargesEntry.setType(EntryType.CREDIT);
+        chargesEntry.setAccount(accounts.getChargesAccount());
+        chargesEntry.setAmount(charges);
+        chargesEntry.setDateTime(chargesForPayment.getDateTime());
+        chargesEntry.setFinancialEvent(chargesForPayment);
+        chargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final JournalEntry deductChargesEntry = new JournalEntry();
+        deductChargesEntry.setType(EntryType.DEBIT);
+        deductChargesEntry.setAccount(chargesForPayment.getCollectedFrom());
+        deductChargesEntry.setAmount(charges);
+        deductChargesEntry.setDateTime(chargesForPayment.getDateTime());
+        deductChargesEntry.setFinancialEvent(chargesForPayment);
+        deductChargesEntry.setPostingStatus(PostingStatus.UNPOSTED);
+        final Set<JournalEntry> journalEntries = new HashSet<>();
+        journalEntries.add(chargesEntry);
+        journalEntries.add(deductChargesEntry);
+
+        String description = "Service charge for Incoming payment from " + payment.getPayer() +
+                " to " + payment.getPayee().getFullName();
+
+        chargesForPayment.setDescription(description);
+        chargesForPayment.setJournalEntries(journalEntries);
+    }
+
+    public void generatePaymentMessage(Payment payment) {
+        OutgoingPaymentMessage outgoingPaymentMessage = new OutgoingPaymentMessage();
+        outgoingPaymentMessage.setOrderingCustomer(payment.getPayer().getFullName());
+        outgoingPaymentMessage.setBeneficiary(payment.getPayee().getIban());
+        outgoingPaymentMessage.setAmount(payment.getPaymentAmount());
+        outgoingPaymentMessage.setBookingDate(payment.getDateTime());
+        outgoingPaymentMessage.setProcessed(false);
+        outgoingPaymentMessage.generate();
+        payment.setOutgoingPaymentMessage(outgoingPaymentMessage);
+        em.persist(outgoingPaymentMessage);
+    }
+
+}
+----
+
+The `PaymentService` is similar to the `DepositService` and `WithdrawalService`, except it is handles two separate operations - 
+
+* outgoing payments made from one BankPlus customer to another BankPlus customer or an customer in an external bank
+* incoming payments made by customers in external banks to a customer in BankPlus.
+
+In the case of both payments, it creates the necessary journal entries when persisting the financial transaction, and then eventually posts these journal entries to the ledger. The service creates the following journal entries for outgoing payments -
+
+* A credit entry to recipient customer's account, with the amount equivalent to the payment amount. This credit entry to the recipient's account indicates that the bank owes the recipient additional money over his previous balance before the transaction. If the recipient does not exist in BankPlus, he/she obviously exists in a different bank, and instead of a recipient account, the credit entry is made to the clearing account.
+* A debit entry to the customer's account, with the amount equivalent to the payment amount. The customer's account balance also has to decrease by the same amount as the payment amount.
+* A credit entry to the Bank's charges account, to the extent of the payment service charge (0.5% of the transaction amount). This service charge is means through which the payment bank derives income.
+* A debit entry to the customer's account to the extent of the payment service charge.
+
+For incoming payments, a similar set of journal entries are made -
+
+* A credit entry to recipient customer's account, with the amount equivalent to the payment amount. This credit entry to the recipient's account indicates that the bank owes the recipient additional money over his previous balance before the transaction. If the recipient does not exist in BankPlus, then no payment is made.
+* A debit entry to the Bank's clearing account, with the amount equivalent to the payment amount. The customer's account balance also has to decrease by the same amount as the payment amount.
+* A credit entry to the Bank's charges account, to the extent of the payment service charge (0.5% of the transaction amount). Like for outgoing payments, the payment bank also applies a charge on incoming payments.
+* A debit entry to the customer's account to the extent of the payment service charge.
+
+In addition to the above, the `PaymentService` also generates an outgoing payment message in the form of XML, to be delivered to the clearing bank, once it is determined that the recipient customer of an outgoing payment is not a customer in BankPlus, but a customer in a different bank. The structure of the XML-based payment message is similar to some of the ISO 20022 payment message formats, and is very loosely based on it. The outgoing payment message is modelled as a JAXB-annotated class:
+
+.src/main/java/org/jboss/examples/bankplus/messages/model/OutgoingPaymentMessage.java
+[source,java]
+----
+package org.jboss.examples.bankplus.messages.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.Lob;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
+import java.io.ByteArrayOutputStream;
+import java.util.Date;
+
+@XmlRootElement
+@Entity
+public class OutgoingPaymentMessage {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String orderingCustomer;
+
+    private String beneficiary;
+
+    private Money amount;
+
+    private Date bookingDate;
+
+    @Lob
+    private String messageText;
+
+    private boolean processed;
+
+    @XmlTransient
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @XmlElement
+    public String getOrderingCustomer() {
+        return orderingCustomer;
+    }
+
+    public void setOrderingCustomer(String orderingCustomer) {
+        this.orderingCustomer = orderingCustomer;
+    }
+
+    @XmlElement
+    public String getBeneficiary() {
+        return beneficiary;
+    }
+
+    public void setBeneficiary(String beneficiary) {
+        this.beneficiary = beneficiary;
+    }
+
+    @XmlElement
+    public Money getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Money amount) {
+        this.amount = amount;
+    }
+
+    @XmlElement
+    public Date getBookingDate() {
+        return bookingDate;
+    }
+
+    public void setBookingDate(Date bookingDate) {
+        this.bookingDate = bookingDate;
+    }
+
+    @XmlTransient
+    public String getMessageText() {
+        return messageText;
+    }
+
+    public void setMessageText(String messageText) {
+        this.messageText = messageText;
+    }
+
+    @XmlTransient
+    public boolean isProcessed() {
+        return processed;
+    }
+
+    public void setProcessed(boolean processed) {
+        this.processed = processed;
+    }
+
+    public void generate() {
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(OutgoingPaymentMessage.class);
+            Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+            jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            jaxbMarshaller.marshal(this, baos);
+            setMessageText(baos.toString());
+        } catch (JAXBException jaxbEx) {
+            throw new RuntimeException(jaxbEx);
+        }
+    }
+}
+----
+
+Finally, let's create the JPA entities that are eventually persisted by the transactions service:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Event.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+
+import javax.persistence.*;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+@Entity
+@Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
+public class Event {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    private String description;
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    @Temporal(TemporalType.TIMESTAMP)
+    public Date dateTime;
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "financialEvent")
+    private Set<JournalEntry> journalEntries = new HashSet<>();
+
+    public Set<JournalEntry> getJournalEntries() {
+        return journalEntries;
+    }
+
+    public void setJournalEntries(Set<JournalEntry> journalEntries) {
+        this.journalEntries = journalEntries;
+    }
+}
+----
+
+An `Event` is a super-type for all types of financial events managed by the system - deposits, withdrawals, payments and charges. It contains a description that is used to provide some information about the financial event. It also stores the date and time when the event occurred, as well as the set of journal entries that were generated for the financial event.
+
+A `Deposit` is a very simple financial event - it merely stores who deposited money and how much.
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Deposit.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+
+@Entity
+public class Deposit extends Event {
+
+    @ManyToOne
+    private Customer depositor;
+
+    public Customer getDepositor() {
+        return depositor;
+    }
+
+    public void setDepositor(Customer depositor) {
+        this.depositor = depositor;
+    }
+
+    @Embedded
+    private Money depositAmount;
+
+    public Money getDepositAmount() {
+        return depositAmount;
+    }
+
+    public void setDepositAmount(Money depositAmount) {
+        this.depositAmount = depositAmount;
+    }
+}
+----
+
+Likewise, a `Withdrawal` is also a very simple financial event - it stores information about who withdrew money and how much:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Withdrawal.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+
+@Entity
+public class Withdrawal extends Event {
+
+    @ManyToOne
+    private Customer withdrawer;
+
+    public Customer getWithdrawer() {
+        return withdrawer;
+    }
+
+    public void setWithdrawer(Customer withdrawer) {
+        this.withdrawer = withdrawer;
+    }
+
+    @Embedded
+    private Money withdrawalAmount;
+
+    public Money getWithdrawalAmount() {
+        return withdrawalAmount;
+    }
+
+    public void setWithdrawalAmount(Money withdrawalAmount) {
+        this.withdrawalAmount = withdrawalAmount;
+    }
+}
+----
+
+A `Payment` (really an outgoing payment), stores additional information. It stores information about the customer that made the payment, the contact to whom the payment was made, how much money was paid, and any outgoing payment message that was generated:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Payment.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.customer.model.Contact;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.messages.model.OutgoingPaymentMessage;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToOne;
+
+@Entity
+public class Payment extends Event {
+
+    @ManyToOne
+    private Customer payer;
+
+    public Customer getPayer() {
+        return payer;
+    }
+
+    public void setPayer(Customer payer) {
+        this.payer = payer;
+    }
+
+    @ManyToOne
+    private Contact payee;
+
+    public Contact getPayee() {
+        return payee;
+    }
+
+    public void setPayee(Contact payee) {
+        this.payee = payee;
+    }
+
+    @Embedded
+    private Money paymentAmount;
+
+    public Money getPaymentAmount() {
+        return paymentAmount;
+    }
+
+    public void setPaymentAmount(Money withdrawalAmount) {
+        this.paymentAmount = withdrawalAmount;
+    }
+
+    @OneToOne
+    private OutgoingPaymentMessage outgoingPaymentMessage;
+
+    public OutgoingPaymentMessage getOutgoingPaymentMessage() {
+        return outgoingPaymentMessage;
+    }
+
+    public void setOutgoingPaymentMessage(OutgoingPaymentMessage outgoingPaymentMessage) {
+        this.outgoingPaymentMessage = outgoingPaymentMessage;
+    }
+}
+----
+
+We have a different class to model incoming payments - `IncomingPayment`:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/IncomingPayment.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+import javax.persistence.OneToOne;
+
+@Entity
+public class IncomingPayment extends Event {
+
+    private String payer;
+
+    public String getPayer() {
+        return payer;
+    }
+
+    public void setPayer(String payer) {
+        this.payer = payer;
+    }
+
+    @ManyToOne
+    private Customer payee;
+
+    public Customer getPayee() {
+        return payee;
+    }
+
+    public void setPayee(Customer payee) {
+        this.payee = payee;
+    }
+
+    @Embedded
+    private Money paymentAmount;
+
+    public Money getPaymentAmount() {
+        return paymentAmount;
+    }
+
+    public void setPaymentAmount(Money withdrawalAmount) {
+        this.paymentAmount = withdrawalAmount;
+    }
+
+    @OneToOne
+    private IncomingPaymentMessage incomingPaymentMessage;
+
+    public IncomingPaymentMessage getIncomingPaymentMessage() {
+        return incomingPaymentMessage;
+    }
+
+    public void setIncomingPaymentMessage(IncomingPaymentMessage outgoingPaymentMessage) {
+        this.incomingPaymentMessage = outgoingPaymentMessage;
+    }
+}
+----
+
+
+A `Charge` is simpler. It stores the customer who was charged, and how much:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Charge.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embedded;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+
+@Entity
+public class Charge extends Event {
+
+    @ManyToOne
+    private Account collectedFrom;
+
+    public Account getCollectedFrom() {
+        return collectedFrom;
+    }
+
+    public void setCollectedFrom(Account collectedFrom) {
+        this.collectedFrom = collectedFrom;
+    }
+
+    @Embedded
+    private Money chargeAmount;
+
+    public Money getChargeAmount() {
+        return chargeAmount;
+    }
+
+    public void setChargeAmount(Money chargeAmount) {
+        this.chargeAmount = chargeAmount;
+    }
+}
+----
+
+
+Let's wrap this up with the runtime exception classes used in the services classes:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/DepositException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.core.exception.BusinessException;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class DepositException extends BusinessException {
+
+    public DepositException() {
+    }
+
+    public DepositException(String message) {
+        super(message);
+    }
+
+    public DepositException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public DepositException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/WithdrawalException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.core.exception.BusinessException;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class WithdrawalException extends BusinessException {
+
+    public WithdrawalException() {
+    }
+
+    public WithdrawalException(String message) {
+        super(message);
+    }
+
+    public WithdrawalException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public WithdrawalException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/PaymentException.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services;
+
+import org.jboss.examples.bankplus.core.exception.BusinessException;
+
+import javax.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)
+public class PaymentException extends BusinessException {
+
+    public PaymentException() {
+    }
+
+    public PaymentException(String message) {
+        super(message);
+    }
+
+    public PaymentException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public PaymentException(Throwable cause) {
+        super(cause);
+    }
+}
+----
+
+
+==== Incoming payments
+
+We now move onto the specific area of incoming payments. In the case of BankPlus, incoming payments would be received in a JMS queue, allowing for payment messages from the clearing bank to be received, stored in a durable store, and acknowledged. The payment message would be in the form of XML - it would be deserialized by BankPlus, before being processed.
+
+Let's implement this functionality through a Message-driven bean:
+
+.src/main/java/org/jboss/examples/bankplus/messages/model/IncomingPaymentProcessor.java
+[source,java]
+----
+package org.jboss.examples.bankplus.messages.model;
+
+import org.jboss.examples.bankplus.money.model.CurrencyAdapter;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.transactions.services.PaymentService;
+
+import javax.ejb.ActivationConfigProperty;
+import javax.ejb.MessageDriven;
+import javax.inject.Inject;
+import javax.jms.*;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
+import java.io.StringReader;
+import java.util.logging.Logger;
+
+@JMSDestinationDefinition(name = "java:jboss/jms/queue/IncomingPaymentsQueue",
+        interfaceName = "javax.jms.Queue",
+        destinationName = "IncomingPaymentsQueue")
+@MessageDriven(name = "HelloWorldQueueMDB", activationConfig = {
+        @ActivationConfigProperty(propertyName = "destinationLookup", propertyValue = "queue/IncomingPaymentsQueue"),
+        @ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue"),
+        @ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge") })
+public class IncomingPaymentProcessor implements MessageListener {
+
+    private final static Logger LOGGER = Logger.getLogger(IncomingPaymentProcessor.class.toString());
+
+    @Inject
+    private PaymentService paymentService;
+
+    @Inject
+    private Currencies currencies;
+
+    @Override
+    public void onMessage(Message message) {
+        TextMessage textMessage = null;
+        try {
+            if (message instanceof TextMessage) {
+                textMessage = (TextMessage) message;
+                String paymentMessageText = textMessage.getText();
+                IncomingPaymentMessage paymentMessage = null;
+                try {
+                    JAXBContext jaxbContext = JAXBContext.newInstance(IncomingPaymentMessage.class);
+                    Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
+                    CurrencyAdapter currencyAdapter = new CurrencyAdapter();
+                    currencyAdapter.setCurrencies(currencies);
+                    jaxbUnmarshaller.setAdapter(currencyAdapter);
+
+                    StringReader reader = new StringReader(paymentMessageText);
+                    paymentMessage = (IncomingPaymentMessage) jaxbUnmarshaller.unmarshal(reader);
+                } catch (JAXBException jaxbEx) {
+                    throw new RuntimeException(jaxbEx);
+                }
+                paymentService.newIncomingPayment(paymentMessage);
+            } else {
+                LOGGER.warning("Message of wrong type: " + message.getClass().getName());
+            }
+        } catch (JMSException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+----
+
+The XML messages would be pushed into the JMS queue, by a hypothetical system that interfaces with the clearing bank. Every message would converted into a text message, deserialized from the raw XML form into a `IncomingPaymentMessage` instance that will be forwarded to the `PaymentService` to be processed.
+
+Let's look at the structure of the `IncomingPaymentMessage` class:
+
+.src/main/java/org/jboss/examples/bankplus/messages/model/IncomingPaymentMessage.java
+[source,java]
+----
+package org.jboss.examples.bankplus.messages.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.Lob;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
+import java.io.ByteArrayOutputStream;
+import java.util.Date;
+
+@XmlRootElement
+@Entity
+public class IncomingPaymentMessage {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String orderingCustomer;
+
+    private String beneficiary;
+
+    private Money amount;
+
+    private Date bookingDate;
+
+    @Lob
+    private String messageText;
+
+    private boolean processed;
+
+    @XmlTransient
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    @XmlElement
+    public String getOrderingCustomer() {
+        return orderingCustomer;
+    }
+
+    public void setOrderingCustomer(String orderingCustomer) {
+        this.orderingCustomer = orderingCustomer;
+    }
+
+    @XmlElement
+    public String getBeneficiary() {
+        return beneficiary;
+    }
+
+    public void setBeneficiary(String beneficiary) {
+        this.beneficiary = beneficiary;
+    }
+
+    @XmlElement
+    public Money getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Money amount) {
+        this.amount = amount;
+    }
+
+    @XmlElement
+    public Date getBookingDate() {
+        return bookingDate;
+    }
+
+    public void setBookingDate(Date bookingDate) {
+        this.bookingDate = bookingDate;
+    }
+
+    @XmlTransient
+    public String getMessageText() {
+        return messageText;
+    }
+
+    public void setMessageText(String messageText) {
+        this.messageText = messageText;
+    }
+
+    @XmlTransient
+    public boolean isProcessed() {
+        return processed;
+    }
+
+    public void setProcessed(boolean processed) {
+        this.processed = processed;
+    }
+
+    public void generate() {
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(IncomingPaymentMessage.class);
+            Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+            jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            jaxbMarshaller.marshal(this, baos);
+            setMessageText(baos.toString());
+        } catch (JAXBException jaxbEx) {
+            throw new RuntimeException(jaxbEx);
+        }
+    }
+
+}
+----
+
+It contains information about who ordered the payment, the beneficiary in the form of his/her IBAN (the clearing bank takes care to route messages to BankPlus customers to BankPlus, so we don't have to worry about IBANs of other banks), the amount to be paid, among other information.
+
+Since we will not be writing the clearing bank, we'll instead mimic the generation of incoming payment messages through a bot:
+
+.src/main/java/org/jboss/examples/bankplus/application/PaymentBot.java
+[source,java]
+----
+package org.jboss.examples.bankplus.application;
+
+import com.google.common.collect.ImmutableList;
+import org.jboss.examples.bankplus.customer.model.CustomerAccount;
+import org.jboss.examples.bankplus.messages.model.IncomingPaymentMessage;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+import org.jboss.examples.bankplus.customer.services.CustomerAccounts;
+
+import javax.annotation.Resource;
+import javax.ejb.Schedule;
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.jms.JMSContext;
+import javax.jms.Queue;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+import java.util.Random;
+
+@Stateless
+public class PaymentBot {
+
+    private static final ImmutableList<String> PAYERS = ImmutableList.<String>builder()
+            .add("Alice")
+            .add("Bob")
+            .add("Charlie")
+            .add("Dave")
+            .add("Eve")
+            .add("Frank")
+            .build();
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private CustomerAccounts customerAccounts;
+
+    @Inject
+    private Currencies currencies;
+
+    @Inject
+    private JMSContext jmsContext;
+
+    @Resource(mappedName = "java:jboss/jms/queue/IncomingPaymentsQueue")
+    private Queue incomingPaymentsQueue;
+
+    @Schedule(minute = "*/1", hour = "*")
+    public void schedulePayment(){
+        Currency USD = currencies.findByCode("USD");
+
+        List<CustomerAccount> allAccounts = customerAccounts.listAll();
+        Random random = new Random();
+        int numAccounts = allAccounts.size();
+        if (numAccounts < 1) {
+            return;
+        }
+        int randomPick = random.nextInt(numAccounts);
+        CustomerAccount customerAccount = allAccounts.get(randomPick);
+
+        String randomSender = PAYERS.get(random.nextInt(PAYERS.size()));
+
+        BigDecimal amountToPay = new BigDecimal(random.nextInt(10) + 1);
+
+        IncomingPaymentMessage incomingPaymentMessage = new IncomingPaymentMessage();
+        incomingPaymentMessage.setOrderingCustomer(randomSender);
+        incomingPaymentMessage.setBeneficiary(customerAccount.getIban());
+        incomingPaymentMessage.setBookingDate(new Date());
+        incomingPaymentMessage.setAmount(new Money(USD, amountToPay));
+
+        incomingPaymentMessage.generate();
+
+        String paymentMessageText = incomingPaymentMessage.getMessageText();
+        jmsContext.createProducer().send(incomingPaymentsQueue, paymentMessageText);
+    }
+}
+----
+
+The bot is implemented using an EJB scheduler. It runs every minute, and on every run, it choose a customer account in the system randomly. It then generates a payment message with a fictitious sender selected randomly from a pool of senders. The amount specified in the payment message is also chosen randomly. Once the message is generated, it is serialized into XML, and written to the before-mentioned JMS queue that BankPlus listens on.
+
+=== Viewing account statements
+
+We now move onto the final set of use cases, involving the generation of account statements:
+
+[NOTE]
+====
+As a registered user, I would be able to obtain accounts statements for the current month, year, or for a specified period.
+====
+
+Create the required sub-resources at the `/customers/:customerId/deposits`, `/customers/:customerId/withdrawals` and `/customers/:customerId/payments` URLs in the previously created `CustomerResource` class:
+
+.src/main/java/org/jboss/examples/bankplus/customer/rest/CustomerResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.customer.rest;
+
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.reporting.rest.ReportsResource;
+import org.jboss.examples.bankplus.customer.services.CustomerService;
+import org.jboss.examples.bankplus.customer.services.CustomerUpdateException;
+import org.jboss.examples.bankplus.transactions.rest.DepositsResource;
+import org.jboss.examples.bankplus.transactions.rest.PaymentsResource;
+import org.jboss.examples.bankplus.transactions.rest.WithdrawalsResource;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.ws.rs.core.UriBuilder;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ *
+ */
+@Stateless
+@Path("/customers")
+public class CustomerResource {
+
+    ...
+
+    @Inject
+    private ReportsResource reportsResource;
+
+    ...
+
+    @Path("/{id:[0-9][0-9]*}/reports")
+    public ReportsResource getReportResource(@PathParam("id") Long id) {
+        Customer customer = customerService.findById(id);
+        if (customer == null) {
+            throw new WebApplicationException(Status.NOT_FOUND);
+        }
+        return reportsResource;
+    }
+
+}
+----
+
+As usual, we create sub-resource locator methods in the `CustomerResource` class, and follow up to create the required sub-resource class:
+
+.src/main/java/org/jboss/examples/bankplus/reporting/rest/ReportsResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.reporting.rest;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountBalanceHistory;
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+import org.jboss.examples.bankplus.customer.model.Customer;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.core.rest.dto.DateWrapper;
+import org.jboss.examples.bankplus.reporting.rest.dto.StatementLineItemDTO;
+
+import javax.ejb.Stateless;
+import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
+import javax.persistence.criteria.*;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriInfo;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+@Stateless
+public class ReportsResource {
+
+    @Context
+    private UriInfo uriInfo;
+
+    @PersistenceContext(unitName = "Bankplus-persistence-unit")
+    private EntityManager em;
+
+    @GET
+    @Path("/monthly")
+    @Produces("application/json")
+    public Response getMonthlyReport(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
+        LocalDate start = LocalDate.now().withDayOfMonth(1);
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j LEFT JOIN FETCH j.financialEvent WHERE j.account = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
+        if (startPosition != null) {
+            findAllQuery.setFirstResult(startPosition);
+        }
+        if (maxResult != null) {
+            findAllQuery.setMaxResults(maxResult);
+        }
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount());
+        findAllQuery.setParameter("start", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        final List<JournalEntry> searchResults = findAllQuery.getResultList();
+
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        accountBalanceHistoryQuery.setParameter("date", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+
+        Money openingBalance = null;
+        Date openDate = null;
+        try{
+            AccountBalanceHistory monthlyStartingAccountBalance = accountBalanceHistoryQuery.getSingleResult();
+            openingBalance = monthlyStartingAccountBalance.getOpeningBalance();
+            openDate = monthlyStartingAccountBalance.getDate();
+        } catch (NoResultException noRes) {
+            openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
+            openDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+        }
+
+        StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
+        openingBalanceStatement.setDescription("Opening Balance");
+        BigDecimal runningBalance = openingBalance.getAmount();
+        openingBalanceStatement.setBalance(runningBalance);
+
+        final List<StatementLineItemDTO> results = new ArrayList<>();
+        results.add(openingBalanceStatement);
+        for (JournalEntry searchResult : searchResults) {
+            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+            StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
+            dto.setBalance(runningBalance);
+            results.add(dto);
+        }
+        return Response.ok(results)
+                .build();
+    }
+
+    @GET
+    @Path("/yearly")
+    @Produces("application/json")
+    public Response getYearlyReport(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
+        LocalDate start = LocalDate.now().withDayOfMonth(1).withDayOfYear(1);
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery("SELECT DISTINCT j FROM JournalEntry j WHERE j.account = :accountId AND j.dateTime >= :start ORDER BY j.id, j.dateTime", JournalEntry.class);
+        if (startPosition != null) {
+            findAllQuery.setFirstResult(startPosition);
+        }
+        if (maxResult != null) {
+            findAllQuery.setMaxResults(maxResult);
+        }
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        findAllQuery.setParameter("accountId", customer.getCustomerAccount().getFinancialAccount());
+        findAllQuery.setParameter("start", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        final List<JournalEntry> searchResults = findAllQuery.getResultList();
+
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        accountBalanceHistoryQuery.setParameter("date", Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+
+        Money openingBalance = null;
+        Date openDate = null;
+        try{
+            AccountBalanceHistory yearlyStartingAccountBalance = accountBalanceHistoryQuery.getSingleResult();
+            openingBalance = yearlyStartingAccountBalance.getOpeningBalance();
+            openDate = yearlyStartingAccountBalance.getDate();
+        } catch (NoResultException noRes) {
+            openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
+            openDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+        }
+
+        StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
+        openingBalanceStatement.setDescription("Opening Balance");
+        BigDecimal runningBalance = openingBalance.getAmount();
+        openingBalanceStatement.setBalance(runningBalance);
+
+        final List<StatementLineItemDTO> results = new ArrayList<>();
+        results.add(openingBalanceStatement);
+        for (JournalEntry searchResult : searchResults) {
+            runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+            StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
+            dto.setBalance(runningBalance);
+            results.add(dto);
+        }
+        return Response.ok(results)
+                .build();
+    }
+
+    @GET
+    @Produces("application/json")
+    public Response getCustomReport(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult, @QueryParam("fromDate") DateWrapper wrappedFrom, @QueryParam("toDate") DateWrapper wrappedTo) {
+        Date from = wrappedFrom == null ? null : wrappedFrom.getDate();
+        Date to = wrappedTo == null ? null : wrappedTo.getDate();
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<JournalEntry> q = cb.createQuery(JournalEntry.class);
+        Root<JournalEntry> j = q.from(JournalEntry.class);
+        ParameterExpression<Account> accountParam = cb.parameter(Account.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(j.get("account"), accountParam));
+        if(from != null) {
+            javax.persistence.criteria.Path<Date> dateTime = j.get("dateTime");
+            predicates.add(cb.greaterThanOrEqualTo(dateTime, from));
+        }
+        if(to != null) {
+            javax.persistence.criteria.Path<Date> dateTime = j.get("dateTime");
+            // Adjust the date by one more day, as date comparison will result
+            // in ignoring transactions occurring after 12:00 AM.
+            Date nextDay = Date.from(Instant.from(to.toInstant().atZone(ZoneId.systemDefault()).plusDays(1)));
+            predicates.add(cb.lessThanOrEqualTo(dateTime, nextDay));
+        }
+        q.select(j)
+                .where(predicates.toArray(new Predicate[]{}))
+                .orderBy(cb.asc(j.get("id")), cb.asc(j.get("dateTime")));
+
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery(q);
+        if (startPosition != null) {
+            findAllQuery.setFirstResult(startPosition);
+        }
+        if (maxResult != null) {
+            findAllQuery.setMaxResults(maxResult);
+        }
+        Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
+        Customer customer = em.find(Customer.class, customerId);
+        findAllQuery.setParameter(accountParam, customer.getCustomerAccount().getFinancialAccount());
+        final List<JournalEntry> searchResults = findAllQuery.getResultList();
+        final List<StatementLineItemDTO> results = new ArrayList<>();
+
+        TypedQuery<AccountBalanceHistory> accountBalanceHistoryQuery = em.createQuery("SELECT DISTINCT bal FROM AccountBalanceHistory bal WHERE bal.account = :account AND bal.date = :date", AccountBalanceHistory.class);
+        accountBalanceHistoryQuery.setParameter("account", customer.getCustomerAccount().getFinancialAccount());
+        accountBalanceHistoryQuery.setParameter("date", from);
+
+        Money openingBalance = null;
+        Date openDate = null;
+        try{
+            AccountBalanceHistory periodOpenAccountBalance = accountBalanceHistoryQuery.getSingleResult();
+            openingBalance = periodOpenAccountBalance.getOpeningBalance();
+            openDate = periodOpenAccountBalance.getDate();
+        } catch (NoResultException noRes) {
+            Date accountOpenDate = customer.getCustomerAccount().getFinancialAccount().getPeriodOpenDate();
+            if((from != null && (from.equals(accountOpenDate) || from.before(accountOpenDate)))
+                    || (to != null && (to.equals(accountOpenDate) || to.after(accountOpenDate)))
+                    || (from == null && to == null)) {
+                openDate = accountOpenDate;
+                openingBalance = customer.getCustomerAccount().getFinancialAccount().getOpeningBalance();
+            }
+        }
+
+        if(openDate != null) {
+            StatementLineItemDTO openingBalanceStatement = new StatementLineItemDTO();
+            openingBalanceStatement.setDescription("Opening Balance");
+            BigDecimal runningBalance = openingBalance.getAmount();
+            openingBalanceStatement.setBalance(runningBalance);
+            results.add(openingBalanceStatement);
+
+            for (JournalEntry searchResult : searchResults) {
+                runningBalance = searchResult.getType() == EntryType.CREDIT ? runningBalance.add(searchResult.getAmount().getAmount()) : runningBalance.subtract(searchResult.getAmount().getAmount());
+                StatementLineItemDTO dto = new StatementLineItemDTO(searchResult);
+                dto.setBalance(runningBalance);
+                results.add(dto);
+            }
+        }
+        return Response.ok(results)
+                .build();
+    }
+}
+----
+
+The statements are created by fetching journal entries that match the required criteria (entries from the current month, or year, or entries matching the specified duration). All matching entries are then used to create statement lines in the account statement, with the first statement line being that of the opening balance of the account for the specified duration (current month's opening balance, or current year's opening balance, or opening balance for the duration specified by the user).
+
+Every debit and credit made to the account balance is reflected in the running balance of the account. The collection of all statement lines is then presented as the account statement for the requested period.
+
+To close this use case, let's look at what constitutes an individual Statement Line item representation, within the collection of statement lines returned by the sub-resource class:
+
+.src/main/java/org/jboss/examples/bankplus/reporting/rest/dto/StatementLineItemDTO.java
+[source,java]
+----
+package org.jboss.examples.bankplus.reporting.rest.dto;
+
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.model.JournalEntry;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+public class StatementLineItemDTO implements Serializable {
+
+    private Long id;
+
+    private Date dateTime;
+
+    private String description;
+
+    private String type;
+
+    private BigDecimal amount;
+
+    private BigDecimal balance;
+
+    public StatementLineItemDTO() {
+
+    }
+
+    public StatementLineItemDTO(JournalEntry entity) {
+        if (entity != null) {
+            this.id = entity.getId();
+            this.dateTime = entity.getDateTime();
+            this.description = entity.getFinancialEvent().getDescription();
+            this.type = entity.getType() == EntryType.CREDIT ? "Deposit" : "Withdrawal";
+            this.amount = entity.getAmount().getAmount();
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public BigDecimal getBalance() {
+        return balance;
+    }
+
+    public void setBalance(BigDecimal balance) {
+        this.balance = balance;
+    }
+}
+----
+
+
+=== Bootstrapping the application
+
+If you attempt to run the application and perform transactions, they would result in failures since we need to establish a few pre-requisites like the system currency (USD), the account hierarchy and the designated accounts like Cash, Charges, Liabilities that are required by the system. To do this before any user accesses the application, we'll perform this activity when the application is bootstrapped by the container:
+
+.src/main/java/org/jboss/examples/bankplus/application/LifecycleListener.java
+[source,java]
+----
+package org.jboss.examples.bankplus.application; /**
+
+import javax.inject.Inject;
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
+import javax.servlet.annotation.WebListener;
+import javax.servlet.http.HttpSessionAttributeListener;
+import javax.servlet.http.HttpSessionEvent;
+import javax.servlet.http.HttpSessionListener;
+import javax.servlet.http.HttpSessionBindingEvent;
+
+@WebListener()
+public class LifecycleListener implements ServletContextListener {
+
+    // Public constructor is required by servlet spec
+    public LifecycleListener() {
+    }
+
+    @Inject
+    private Bootstrap bootstrap;
+
+    // -------------------------------------------------------
+    // ServletContextListener implementation
+    // -------------------------------------------------------
+    @Override
+    public void contextInitialized(ServletContextEvent sce) {
+      /* This method is called when the servlet context is
+         initialized(when the Web application is deployed). 
+         You can initialize servlet context related data here.
+      */
+        bootstrap.createAccounts();
+    }
+
+    @Override
+    public void contextDestroyed(ServletContextEvent sce) {
+      /* This method is invoked when the Servlet Context 
+         (the Web application) is undeployed or 
+         Application Server shuts down.
+      */
+    }
+}
+----
+
+The `Bootstrap` class referenced in the `LifecycleListener` contains the necessary logic to setup the pre-requisite records in the database:
+
+.src/main/java/org/jboss/examples/bankplus/application/Bootstrap.java
+[source,java]
+----
+package org.jboss.examples.bankplus.application;
+
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.money.model.Currency;
+import org.jboss.examples.bankplus.money.model.Money;
+import org.jboss.examples.bankplus.money.services.Currencies;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.persistence.PersistenceContext;
+import java.math.BigDecimal;
+import java.util.function.Consumer;
+
+@Stateless
+public class Bootstrap {
+
+    private final ImmutableSet<ImmutableMap<String, String>> ACCOUNTS = ImmutableSet.<ImmutableMap<String, String>>builder()
+            .add(ImmutableMap.of("id", "1000", "name", "Assets", "type", "ASSET", "parent", ""))
+            .add(ImmutableMap.of("id", "2000", "name", "Liabilities", "type", "LIABILITY", "parent", ""))
+            .add(ImmutableMap.of("id", "3000", "name", "Equity", "type", "EQUITY", "parent", ""))
+            .add(ImmutableMap.of("id", "4000", "name", "Income", "type", "REVENUE", "parent", ""))
+            .add(ImmutableMap.of("id", "5000", "name", "Expenses", "type", "EXPENSE", "parent", ""))
+            .add(ImmutableMap.of("id", "1001", "name", "Cash", "type", "ASSET", "parent", "1000"))
+            .add(ImmutableMap.of("id", "4100", "name", "Charges", "type", "REVENUE", "parent", "4000"))
+            .add(ImmutableMap.of("id", "2001", "name", "Clearing", "type", "LIABILITY", "parent", "2000"))
+            .build();
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Accounts accounts;
+
+    @Inject
+    private Currencies currencies;
+
+    public void createAccounts() {
+        Currency USD = currencies.create("United States Dollar", "USD");
+        ACCOUNTS.forEach(accountInfo -> {
+            String accountId = accountInfo.get("id");
+            String name = accountInfo.get("name");
+            AccountType accountType = Enum.valueOf(AccountType.class, accountInfo.get("type"));
+            String parent = accountInfo.get("parent");
+            Account parentAccount = null;
+            if(!parent.isEmpty()) {
+                parentAccount = accounts.findByAccountId(parent);
+            }
+            accounts.newAccount(accountId, name, accountType, parentAccount, new Money(USD, BigDecimal.ZERO));
+            em.flush();
+        });
+    }
+}
+----

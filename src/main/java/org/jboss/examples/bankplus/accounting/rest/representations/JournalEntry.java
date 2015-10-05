@@ -3,6 +3,7 @@ package org.jboss.examples.bankplus.accounting.rest.representations;
 import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.EntryType;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.accounting.services.Journal;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.xml.bind.annotation.XmlRootElement;
@@ -14,12 +15,29 @@ import java.util.Set;
 @XmlRootElement
 public class JournalEntry implements Serializable {
 
+    private Long id;
     private String accountId;
     private Money amount;
     private Date dateTime;
     private Long eventReference;
     private String description;
     private EntryType type;
+
+    public JournalEntry() {
+
+    }
+
+    public JournalEntry(org.jboss.examples.bankplus.accounting.model.JournalEntry entry) {
+        if(entry != null) {
+            this.id = entry.getId();
+            this.accountId = entry.getAccount().getAccountId();
+            this.amount = entry.getAmount();
+            this.dateTime = entry.getDateTime();
+            this.eventReference = entry.getEventReference();
+            this.description = entry.getDescription();
+            this.type = entry.getType();
+        }
+    }
 
     public static Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> from(Set<JournalEntry> uploadedJournalEntries, Accounts accounts) {
         Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = new HashSet<>();
@@ -40,6 +58,14 @@ public class JournalEntry implements Serializable {
         journalEntry.setDateTime(uploadedJournalEntry.getDateTime());
         journalEntry.setDescription(uploadedJournalEntry.getDescription());
         return journalEntry;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getAccountId() {

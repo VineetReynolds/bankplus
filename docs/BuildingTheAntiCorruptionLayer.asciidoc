@@ -1,0 +1,816 @@
+
+== Breaking the monolith into microservices
+
+To begin breaking the monolith into microservices, we'll need to separate out the services that exist under a single REST API into individual REST APIs without breaking functionality. Additionally, we should make this process of breaking the monolith as seamless as possible, to avoid making big-bang changes or rewriting the application from scratch. Big-bang changes tend to require larger investments in time and the result of change is only visible at the end. We'll attempt to avoid such changes due to the uncertainty associated with them.
+
+What do we use instead? We'll use the concept of an anti-corruption layer from Domain Driven Design to shield the boundary of every bounded context from changes introduced in other contexts. In the scope of this application, a bounded context happens to be the individual service in the business and technical architecture. Through the use of an anti-corruption layer, we initially retain a monolithic architecture, and make changes within, to link the various services, initially with simple method invocations. This helps us to retain the original deployment structure, and make changes within the monolith to eventually break it down to multiple microservices. We then create the REST APIs for the individual microservices, and replace the links between the various bounded contexts/services with REST API invocations.
+
+Just as we decided to implement the services for the backend, the anti-corruption layer would also be built starting with the service having the most dependencies. That way, the anti-corruption layer itself is less prone to changes during it's construction. Once an anti-corruption layer is established for one microservice, it is very unlikely to undergo a change, as it's initial construction should factor in all the clients of the service.
+
+We therefore start with the financial accounting service. We'll remove any references to other services from this service. Starting with the model, we remove reference to financial events referenced by the `Event` class, and instead store an identifier referencing the `Event`. That is, instead of the following:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/JournalEntry.java
+[source,java]
+----
+@Entity
+public class JournalEntry {
+
+    ....
+
+    @ManyToOne
+    private Event financialEvent;
+
+    public Event getFinancialEvent() {
+        return financialEvent;
+    }
+
+    public void setFinancialEvent(Event financialEvent) {
+        this.financialEvent = financialEvent;
+    }
+}
+----
+
+we instead have:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/model/JournalEntry.java
+[source,java]
+----
+@Entity
+public class JournalEntry {
+
+    ....
+
+    private Long eventReference;
+
+    public Long getEventReference() {
+        return eventReference;
+    }
+
+    public void setEventReference(Long eventReference) {
+        this.eventReference = eventReference;
+    }
+
+    private String description;
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+}
+----
+
+We also store a copy of the description of the financial event, as we do not want the reporting service to query both the financial accounting service and the transaction service for the journal entry records and the corresponding description for the journal entry. We'll duplicate the description of the financial event, and store it in two services. It helps that the journal entry will be less frequently updated, or in our case, not updated at all as newer journal entries via new financial events would be made to rectify issues. We therefore, do not have to worry about keeping the descriptions stored by the services, in sync with each other.
+
+Let's now proceed to isolate the `Accounts` and `Journals` services that are used by the transactions service.
+
+We'll replicate the interfaces for these services in the transactions service:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/service/client/Journal.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.client;
+
+import org.jboss.examples.bankplus.transactions.model.JournalEntry;
+import org.jboss.examples.bankplus.transactions.services.adapters.JournalAdapter;
+
+import javax.inject.Inject;
+import java.util.Set;
+
+public class Journal {
+
+    @Inject
+    private JournalAdapter adapter;
+
+    public void recordJournalEntries(Set<JournalEntry> journalEntries) {
+        adapter.recordJournalEntries(journalEntries);
+    }
+}
+----
+
+
+.src/main/java/org/jboss/examples/bankplus/transactions/service/client/Accounts.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.client;
+
+
+import org.jboss.examples.bankplus.transactions.model.Account;
+import org.jboss.examples.bankplus.transactions.services.adapters.AccountsAdapter;
+
+import javax.inject.Inject;
+
+public class Accounts {
+
+    @Inject
+    private AccountsAdapter adapter;
+
+    public Account getCashAccount() {
+        return adapter.getCashAccount();
+    }
+
+    public Account getChargesAccount() {
+        return adapter.getChargesAccount();
+    }
+
+    public Account getClearingAccount() {
+        return adapter.getClearingAccount();
+    }
+}
+----
+
+Both of these clients, delegate their actual functionality to adapters in the transactions service. The adapters fetch an object or objects from the 'legacy' model (which it gets from the `Accounts` or `Journal` service implementations in the financial accounting service), then passes it to the `AccountTranslator` or `JournalEntryTranslator` to transform the object from the financial accounting model to the domain object in transaction service's model.
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/adapters/AccountsAdapter.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.adapters;
+
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.transactions.model.Account;
+import org.jboss.examples.bankplus.transactions.services.translators.AccountTranslator;
+
+import javax.inject.Inject;
+
+public class AccountsAdapter {
+
+    @Inject
+    private Accounts accounts;
+
+    @Inject
+    private AccountTranslator translator;
+
+    public Account getCashAccount() {
+        org.jboss.examples.bankplus.accounting.model.Account cashAccount = accounts.getCashAccount();
+        return translator.translate(cashAccount);
+    }
+
+    public Account getChargesAccount() {
+        org.jboss.examples.bankplus.accounting.model.Account chargesAccount = accounts.getChargesAccount();
+        return translator.translate(chargesAccount);
+    }
+
+    public Account getClearingAccount() {
+        org.jboss.examples.bankplus.accounting.model.Account clearingAccount = accounts.getClearingAccount();
+        return translator.translate(clearingAccount);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/adapters/JournalAdapter.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.adapters;
+
+import org.jboss.examples.bankplus.accounting.services.Journal;
+import org.jboss.examples.bankplus.transactions.model.JournalEntry;
+import org.jboss.examples.bankplus.transactions.services.translators.JournalEntryTranslator;
+
+import javax.inject.Inject;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class JournalAdapter {
+
+    @Inject
+    private JournalEntryTranslator translator;
+
+    @Inject
+    private Journal journal;
+
+    public void recordJournalEntries(Set<JournalEntry> journalEntries) {
+        Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = journalEntries.stream().map(translator::translate).collect(Collectors.toSet());
+        journal.recordJournalEntries(entries);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/translators/AccountTranslator.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.translators;
+
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.transactions.model.Account;
+
+import javax.inject.Inject;
+
+public class AccountTranslator {
+
+    @Inject
+    private Accounts accounts;
+
+    public Account translate(org.jboss.examples.bankplus.accounting.model.Account container) {
+        Account account = null;
+        if(container != null) {
+            account = new Account();
+            account.setAccountReference(container.getAccountId());
+            account.setCurrentBalance(container.getCurrentBalance());
+        }
+        return account;
+    }
+
+    public org.jboss.examples.bankplus.accounting.model.Account translate(Account model) {
+        org.jboss.examples.bankplus.accounting.model.Account container = null;
+        if(model != null) {
+            container = accounts.findByAccountId(model.getAccountReference());
+        }
+        return container;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/translators/JournalEntryTranslator.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.translators;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
+
+import javax.inject.Inject;
+
+public class JournalEntryTranslator {
+
+    @Inject
+    private AccountTranslator accountTranslator;
+
+    public org.jboss.examples.bankplus.accounting.model.JournalEntry translate(JournalEntry model) {
+        org.jboss.examples.bankplus.accounting.model.JournalEntry container = null;
+        if(model != null) {
+            container = new org.jboss.examples.bankplus.accounting.model.JournalEntry();
+            container.setAccount(accountTranslator.translate(model.getAccount()));
+            container.setAmount(model.getAmount());
+            container.setDateTime(model.getDateTime());
+            container.setDescription(model.getDescription());
+            container.setEventReference(model.getEventReference());
+            container.setType(model.getType());
+        }
+        return container;
+    }
+}
+----
+
+And we update the model classes in the transactions service:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/Account.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.persistence.Embeddable;
+import javax.persistence.Transient;
+
+@Embeddable
+public class Account {
+
+    private String accountReference;
+
+    public String getAccountReference() {
+        return accountReference;
+    }
+
+    public void setAccountReference(String accountReference) {
+        this.accountReference = accountReference;
+    }
+
+    @Transient
+    private Money currentBalance;
+
+    public Money getCurrentBalance() {
+        return currentBalance;
+    }
+
+    public void setCurrentBalance(Money currentBalance) {
+        this.currentBalance = currentBalance;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/model/JournalEntry.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.model;
+
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import java.util.Date;
+
+public class JournalEntry {
+
+    private Account account;
+    private Money amount;
+    private Date dateTime;
+    private Long eventReference;
+    private String description;
+    private EntryType type;
+
+    public void setAccount(Account account) {
+        this.account = account;
+    }
+
+    public Account getAccount() {
+        return account;
+    }
+
+    public void setAmount(Money amount) {
+        this.amount = amount;
+    }
+
+    public Money getAmount() {
+        return amount;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setEventReference(Long eventReference) {
+        this.eventReference = eventReference;
+    }
+
+    public Long getEventReference() {
+        return eventReference;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setType(EntryType type) {
+        this.type = type;
+    }
+
+    public EntryType getType() {
+        return type;
+    }
+}
+----
+
+Let's summarize what we've done here in the transactions service. 
+
+* We've isolated the services in the financial accounting service that are consumed by the transactions service.
+* We access the dependent services through clients in the transactions service - `Journal` and `Accounts`, instead of accessing the `Journal` and `Accounts` repositories in the financial accounting service directly. 
+* In order to invoke the services, we create adapters - `JournalAdapter` and `AccountsAdapter` that will invoke the required functionality on the repositories.
+* We make use of translators - `JournalEntryTranslator` and `AccountTranslator` convert objects in the transactions service domain model, to the objects in the financial accounting domain model.
+* We create equivalent representations of the `Account` and `JournalEntry` classes from the financial accounting service in the transactions service, in order to store suitable representations of them.
+
+We're now moving into a stage where we can replace the method invocations with REST API invocations, to achieve a concrete separation of concerns between the transactions service and the financial accounting service:
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/adapters/AccountsAdapter.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.adapters;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.Account;
+import org.jboss.examples.bankplus.transactions.services.translators.AccountTranslator;
+
+import javax.inject.Inject;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+
+public class AccountsAdapter {
+
+    @Inject
+    private AccountTranslator translator;
+
+    public org.jboss.examples.bankplus.transactions.model.Account getCashAccount() {
+        Client client = ClientBuilder.newClient();
+        WebTarget target = client.target("http://localhost:9080/bankplus/rest/").path("accounts")
+                .queryParam("type", "cash");
+        Account account = target.request(MediaType.APPLICATION_JSON_TYPE).get(Account.class);
+        return translator.translate(account);
+    }
+
+    public org.jboss.examples.bankplus.transactions.model.Account getChargesAccount() {
+        Client client = ClientBuilder.newClient();
+        WebTarget target = client.target("http://localhost:9080/bankplus/rest/").path("accounts")
+                .queryParam("type", "charges");
+        Account account = target.request(MediaType.APPLICATION_JSON_TYPE).get(Account.class);
+        return translator.translate(account);
+    }
+
+    public org.jboss.examples.bankplus.transactions.model.Account getClearingAccount() {
+        Client client = ClientBuilder.newClient();
+        WebTarget target = client.target("http://localhost:9080/bankplus/rest/").path("accounts")
+                .queryParam("type", "clearing");
+        Account account = target.request(MediaType.APPLICATION_JSON_TYPE).get(Account.class);
+        return translator.translate(account);
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/adapters/JournalAdapter.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.adapters;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
+import org.jboss.examples.bankplus.transactions.services.translators.JournalEntryTranslator;
+
+import javax.inject.Inject;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class JournalAdapter {
+
+    @Inject
+    private JournalEntryTranslator translator;
+
+    public void recordJournalEntries(Set<org.jboss.examples.bankplus.transactions.model.JournalEntry> journalEntries) {
+        Set<JournalEntry> uploadedEntries = journalEntries.stream().map(translator::translate).collect(Collectors.toSet());
+        Client client = ClientBuilder.newClient();
+        WebTarget target = client.target("http://localhost:9080/bankplus/rest/").path("journal");
+
+        target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.json(uploadedEntries));
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/translators/AccountTranslator.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.translators;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.Account;
+
+public class AccountTranslator {
+
+    public org.jboss.examples.bankplus.transactions.model.Account translate(Account container) {
+        org.jboss.examples.bankplus.transactions.model.Account account = null;
+        if(container != null) {
+            account = new org.jboss.examples.bankplus.transactions.model.Account();
+            account.setAccountReference(container.getAccountId());
+            account.setCurrentBalance(container.getCurrentBalance());
+        }
+        return account;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/transactions/services/translators/JournalEntryTranslator.java
+[source,java]
+----
+package org.jboss.examples.bankplus.transactions.services.translators;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
+
+import javax.inject.Inject;
+
+public class JournalEntryTranslator {
+
+    @Inject
+    private AccountTranslator accountTranslator;
+
+    public JournalEntry translate(org.jboss.examples.bankplus.transactions.model.JournalEntry model) {
+        JournalEntry container = null;
+        if(model != null) {
+            container = new JournalEntry();
+            container.setAccountId(model.getAccount().getAccountReference());
+            container.setAmount(model.getAmount());
+            container.setDateTime(model.getDateTime());
+            container.setDescription(model.getDescription());
+            container.setEventReference(model.getEventReference());
+            container.setType(model.getType());
+        }
+        return container;
+    }
+}
+----
+
+Finally, let's create the required REST API in the financial accounting service:
+
+.src/main/java/org/jboss/examples/bankplus/accounting/rest/JournalResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.rest;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.accounting.services.Journal;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Response;
+import java.util.Set;
+
+@Stateless
+@Path("/journal")
+public class JournalResource {
+
+    @Inject
+    private Journal journal;
+
+    @Inject
+    private Accounts accounts;
+
+    @POST
+    @Consumes("application/json")
+    @Produces("application/json")
+    public Response create(Set<JournalEntry> uploadedJournalEntries) {
+        Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = JournalEntry.from(uploadedJournalEntries, accounts);
+        journal.postToLedger(entries);
+        return Response.accepted()
+                .build();
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/accounting/rest/AccountsResource.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.rest;
+
+import org.jboss.examples.bankplus.accounting.rest.representations.Account;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+
+import javax.ejb.Stateless;
+import javax.inject.Inject;
+import javax.ws.rs.*;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
+import java.util.ArrayList;
+import java.util.List;
+
+@Path("/accounts")
+@Stateless
+public class AccountsResource {
+
+    @Inject
+    private Accounts accounts;
+
+    @GET
+    @Produces("application/json")
+    public Response getAccount(@QueryParam("type") String type, @QueryParam("accountId") String accountId) {
+        if(type != null && !type.isEmpty()) {
+            org.jboss.examples.bankplus.accounting.model.Account account = null;
+            switch (type) {
+                case "cash":
+                    account = accounts.getCashAccount();
+                    break;
+                case "charges":
+                    account = accounts.getChargesAccount();
+                    break;
+                case "clearing":
+                    account = accounts.getClearingAccount();
+                    break;
+                case "liabilities":
+                    account = accounts.getLiabilitiesAccount();
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid account type");
+            }
+            Account accountRepresentation = new Account(account);
+            return Response.ok(accountRepresentation).build();
+        } else if (accountId != null && !accountId.isEmpty()) {
+            org.jboss.examples.bankplus.accounting.model.Account result = accounts.findByAccountId(accountId);
+            Account accountRepresentation = new Account(result);
+            return Response.ok(accountRepresentation).build();
+        } else {
+            List<org.jboss.examples.bankplus.accounting.model.Account> allAccounts = this.accounts.listAll();
+            List<Account> accounts = new ArrayList<>();
+            for(org.jboss.examples.bankplus.accounting.model.Account account: allAccounts) {
+                Account accountRepresentation = new Account(account);
+                accounts.add(accountRepresentation);
+            }
+            return Response.ok(accounts).build();
+        }
+    }
+
+    @POST
+    @Consumes("application/json")
+    @Produces("application/json")
+    public Response createAccount(Account account) {
+        org.jboss.examples.bankplus.accounting.model.Account parentAccount = accounts.findByAccountId(account.getParentAccountId());
+        org.jboss.examples.bankplus.accounting.model.Account newAccount = accounts.newAccount(account.getAccountId(), account.getName(), account.getAccountType(), parentAccount, account.getCurrentBalance());
+        return Response.created(UriBuilder.fromResource(AccountsResource.class).path(String.valueOf(newAccount.getId())).build())
+                .entity(new Account(newAccount))
+                .build();
+    }
+
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/accounting/rest/representations/Account.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.rest.representations;
+
+import org.jboss.examples.bankplus.accounting.model.AccountType;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.util.Date;
+
+@XmlRootElement
+public class Account implements Serializable {
+
+    private Long id;
+    private String accountId;
+    private String name;
+    private AccountType accountType;
+    private Money currentBalance;
+    private Date lastUpdatedOn;
+    private String parentAccountId;
+
+    public Account() {
+
+    }
+
+    public Account(org.jboss.examples.bankplus.accounting.model.Account account) {
+        if(account != null) {
+            this.id = account.getId();
+            this.accountId = account.getAccountId();
+            this.name = account.getName();
+            this.accountType = account.getAccountType();
+            this.currentBalance = account.getCurrentBalance();
+            this.lastUpdatedOn = account.getLastUpdatedOn();
+            org.jboss.examples.bankplus.accounting.model.Account parentAccount = account.getParentAccount();
+            if(parentAccount != null) {
+                this.parentAccountId = parentAccount.getAccountId();
+            }
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(String accountId) {
+        this.accountId = accountId;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public AccountType getAccountType() {
+        return accountType;
+    }
+
+    public void setAccountType(AccountType accountType) {
+        this.accountType = accountType;
+    }
+
+    public Money getCurrentBalance() {
+        return currentBalance;
+    }
+
+    public void setCurrentBalance(Money currentBalance) {
+        this.currentBalance = currentBalance;
+    }
+
+    public Date getLastUpdatedOn() {
+        return lastUpdatedOn;
+    }
+
+    public void setLastUpdatedOn(Date lastUpdatedOn) {
+        this.lastUpdatedOn = lastUpdatedOn;
+    }
+
+    public String getParentAccountId() {
+        return parentAccountId;
+    }
+
+    public void setParentAccountId(String parentAccountId) {
+        this.parentAccountId = parentAccountId;
+    }
+}
+----
+
+.src/main/java/org/jboss/examples/bankplus/accounting/rest/representations/JournalEntry.java
+[source,java]
+----
+package org.jboss.examples.bankplus.accounting.rest.representations;
+
+import org.jboss.examples.bankplus.accounting.model.Account;
+import org.jboss.examples.bankplus.accounting.model.EntryType;
+import org.jboss.examples.bankplus.accounting.services.Accounts;
+import org.jboss.examples.bankplus.money.model.Money;
+
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+
+@XmlRootElement
+public class JournalEntry implements Serializable {
+
+    private String accountId;
+    private Money amount;
+    private Date dateTime;
+    private Long eventReference;
+    private String description;
+    private EntryType type;
+
+    public static Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> from(Set<JournalEntry> uploadedJournalEntries, Accounts accounts) {
+        Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = new HashSet<>();
+        for (JournalEntry uploadedJournalEntry : uploadedJournalEntries) {
+            org.jboss.examples.bankplus.accounting.model.JournalEntry entry = from(uploadedJournalEntry, accounts);
+            entries.add(entry);
+        }
+        return entries;
+    }
+
+    private static org.jboss.examples.bankplus.accounting.model.JournalEntry from(JournalEntry uploadedJournalEntry, Accounts accounts) {
+        org.jboss.examples.bankplus.accounting.model.JournalEntry journalEntry = new org.jboss.examples.bankplus.accounting.model.JournalEntry();
+        Account account = accounts.findByAccountId(uploadedJournalEntry.getAccountId());
+        journalEntry.setAccount(account);
+        journalEntry.setAmount(uploadedJournalEntry.getAmount());
+        journalEntry.setEventReference(uploadedJournalEntry.getEventReference());
+        journalEntry.setType(uploadedJournalEntry.getType());
+        journalEntry.setDateTime(uploadedJournalEntry.getDateTime());
+        journalEntry.setDescription(uploadedJournalEntry.getDescription());
+        return journalEntry;
+    }
+
+    public String getAccountId() {
+        return accountId;
+    }
+
+    public void setAccountId(String accountId) {
+        this.accountId = accountId;
+    }
+
+    public Money getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Money amount) {
+        this.amount = amount;
+    }
+
+    public Date getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(Date dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    public Long getEventReference() {
+        return eventReference;
+    }
+
+    public void setEventReference(Long eventReference) {
+        this.eventReference = eventReference;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public EntryType getType() {
+        return type;
+    }
+
+    public void setType(EntryType type) {
+        this.type = type;
+    }
+
+}
+----
+
+For the sake of brevity, we'll not go into the details of creating similar anti-corruption layers for the other services. Instead copy the rest of the classes from the project.

@@ -3,15 +3,13 @@ package org.jboss.examples.bankplus.accounting.rest;
 import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.accounting.services.Journal;
+import org.jboss.examples.bankplus.core.rest.dto.DateWrapper;
 
 import javax.ejb.Stateless;
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
-import java.util.Set;
+import java.util.*;
 
 @Stateless
 @Path("/journal")
@@ -31,5 +29,26 @@ public class JournalResource {
         journal.postToLedger(entries);
         return Response.accepted()
                 .build();
+    }
+
+    @GET
+    @Produces("application/json")
+    public Response get(@QueryParam("accountId") String accountId, @QueryParam("start") DateWrapper start, @QueryParam("end") DateWrapper end) {
+        Date startDate = null;
+        if(start != null && start.getDate() != null) {
+            startDate = start.getDate();
+        }
+        Date endDate = null;
+        if(end != null && end.getDate() != null) {
+            endDate = end.getDate();
+        }
+        Collection<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = journal.getEntries(accountId, startDate, endDate);
+
+        List<JournalEntry> journalEntries = new ArrayList<>();
+        for(org.jboss.examples.bankplus.accounting.model.JournalEntry entry: entries) {
+            JournalEntry journalEntry = new JournalEntry(entry);
+            journalEntries.add(journalEntry);
+        }
+        return Response.ok(journalEntries).build();
     }
 }

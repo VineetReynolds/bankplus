@@ -7,6 +7,10 @@ import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.persistence.TypedQuery;
+import javax.persistence.criteria.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 @Stateless
@@ -88,5 +92,35 @@ public class Journal {
             em.persist(entry);
         }
         postToLedger(entries);
+    }
+
+    public Collection<JournalEntry> getEntries(String accountId, Date start, Date end) {
+
+        CriteriaBuilder cb = em.getCriteriaBuilder();
+        CriteriaQuery<JournalEntry> q = cb.createQuery(JournalEntry.class);
+        Root<JournalEntry> j = q.from(JournalEntry.class);
+        ParameterExpression<String> accountParam = cb.parameter(String.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.equal(j.get("account").get("accountId"), accountParam));
+        if(start != null) {
+            javax.persistence.criteria.Path<Date> dateTime = j.get("dateTime");
+            predicates.add(cb.greaterThanOrEqualTo(dateTime, start));
+        }
+        if(end != null) {
+            javax.persistence.criteria.Path<Date> dateTime = j.get("dateTime");
+            // Adjust the date by one more day, as date comparison will result
+            // in ignoring transactions occurring after 12:00 AM.
+            Date nextDay = Date.from(Instant.from(end.toInstant().atZone(ZoneId.systemDefault()).plusDays(1)));
+            predicates.add(cb.lessThanOrEqualTo(dateTime, nextDay));
+        }
+        q.select(j)
+                .where(predicates.toArray(new Predicate[]{}))
+                .orderBy(cb.asc(j.get("id")), cb.asc(j.get("dateTime")));
+
+        TypedQuery<JournalEntry> findAllQuery = em.createQuery(q);
+        findAllQuery.setParameter(accountParam, accountId);
+        final List<JournalEntry> searchResults = findAllQuery.getResultList();
+        return searchResults;
     }
 }
