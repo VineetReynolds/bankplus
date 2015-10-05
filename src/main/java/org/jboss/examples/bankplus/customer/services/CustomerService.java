@@ -1,11 +1,10 @@
 package org.jboss.examples.bankplus.customer.services;
 
 import org.jboss.examples.bankplus.customer.model.Account;
-import org.jboss.examples.bankplus.customer.model.Customer;
 import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.customer.services.client.Accounts;
 import org.jboss.examples.bankplus.money.model.Currency;
-import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.customer.rest.representations.Customer;
 import org.jboss.examples.bankplus.money.model.Money;
 import org.jboss.examples.bankplus.money.services.Currencies;
 
@@ -30,8 +29,8 @@ public class CustomerService {
     @Inject
     private Accounts accounts;
 
-    public Customer create(CustomerDTO dto) {
-        Customer customer = dto.fromDTO(null, em);
+    public org.jboss.examples.bankplus.customer.model.Customer create(Customer dto) {
+        org.jboss.examples.bankplus.customer.model.Customer customer = dto.fromDTO(null, em);
         Currency USD = currencies.findByCode("USD");
         CustomerAccount customerAccount = customerAccounts.create("Customer account for " + customer.getFullName(), new Money(USD, BigDecimal.ZERO));
         customer.setCustomerAccount(customerAccount);
@@ -41,7 +40,7 @@ public class CustomerService {
     }
 
     public boolean delete(Long id) {
-        Customer entity = em.find(Customer.class, id);
+        org.jboss.examples.bankplus.customer.model.Customer entity = em.find(org.jboss.examples.bankplus.customer.model.Customer.class, id);
         if (entity == null) {
             return false;
         }
@@ -49,10 +48,10 @@ public class CustomerService {
         return true;
     }
 
-    public Customer findById(Long id) {
-        TypedQuery<Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE c.id = :entityId ORDER BY c.id", Customer.class);
+    public org.jboss.examples.bankplus.customer.model.Customer findById(Long id) {
+        TypedQuery<org.jboss.examples.bankplus.customer.model.Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE c.id = :entityId ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Customer.class);
         findByIdQuery.setParameter("entityId", id);
-        Customer entity;
+        org.jboss.examples.bankplus.customer.model.Customer entity;
         try {
             entity = findByIdQuery.getSingleResult();
         } catch (NoResultException nre) {
@@ -63,12 +62,12 @@ public class CustomerService {
         return entity;
     }
 
-    public List<Customer> listAll(Integer startPosition, Integer maxResult, String email) {
-        TypedQuery<Customer> findAllQuery = null;
+    public List<org.jboss.examples.bankplus.customer.model.Customer> listAll(Integer startPosition, Integer maxResult, String email) {
+        TypedQuery<org.jboss.examples.bankplus.customer.model.Customer> findAllQuery = null;
         if (email == null || email.isEmpty()) {
-            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount ORDER BY c.id", Customer.class);
+            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Customer.class);
         } else {
-            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE LOWER(c.emailAddress) = :emailAddress ORDER BY c.id", Customer.class);
+            findAllQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN FETCH c.customerAccount WHERE LOWER(c.emailAddress) = :emailAddress ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Customer.class);
             findAllQuery.setParameter("emailAddress", email.toLowerCase());
         }
         if (startPosition != null) {
@@ -77,17 +76,17 @@ public class CustomerService {
         if (maxResult != null) {
             findAllQuery.setMaxResults(maxResult);
         }
-        final List<Customer> searchResults = findAllQuery.getResultList();
+        final List<org.jboss.examples.bankplus.customer.model.Customer> searchResults = findAllQuery.getResultList();
 
-        for(Customer customer: searchResults) {
+        for(org.jboss.examples.bankplus.customer.model.Customer customer: searchResults) {
             Account financialAccount = accounts.findByAccountId(customer.getCustomerAccount().getFinancialAccount().getAccountReference());
             customer.getCustomerAccount().setFinancialAccount(financialAccount);
         }
         return searchResults;
     }
 
-    public Customer update(CustomerDTO dto) {
-        Customer entity = em.find(Customer.class, dto.getId());
+    public org.jboss.examples.bankplus.customer.model.Customer update(Customer dto) {
+        org.jboss.examples.bankplus.customer.model.Customer entity = em.find(org.jboss.examples.bankplus.customer.model.Customer.class, dto.getId());
         if (entity == null) {
             return null;
         }
@@ -100,10 +99,10 @@ public class CustomerService {
         return entity;
     }
 
-    public Customer findByIBAN(String iban) {
-        TypedQuery<Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN c.customerAccount acc WHERE acc.iban = :iban ORDER BY c.id", Customer.class);
+    public org.jboss.examples.bankplus.customer.model.Customer findByIBAN(String iban) {
+        TypedQuery<org.jboss.examples.bankplus.customer.model.Customer> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Customer c LEFT JOIN FETCH c.contacts LEFT JOIN c.customerAccount acc WHERE acc.iban = :iban ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Customer.class);
         findByIdQuery.setParameter("iban", iban);
-        Customer entity;
+        org.jboss.examples.bankplus.customer.model.Customer entity;
         try {
             entity = findByIdQuery.getSingleResult();
         } catch (NoResultException nre) {

@@ -1,8 +1,7 @@
 package org.jboss.examples.bankplus.transactions.rest;
 
 import org.jboss.examples.bankplus.transactions.model.Customer;
-import org.jboss.examples.bankplus.transactions.model.Deposit;
-import org.jboss.examples.bankplus.transactions.rest.dto.DepositDTO;
+import org.jboss.examples.bankplus.transactions.rest.representation.Deposit;
 import org.jboss.examples.bankplus.transactions.services.DepositService;
 import org.jboss.examples.bankplus.transactions.services.client.Customers;
 
@@ -28,10 +27,10 @@ public class DepositsResource {
 
     @POST
     @Consumes("application/json")
-    public Response create(DepositDTO dto) {
+    public Response create(Deposit dto) {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = customers.findById(customerId);
-        Deposit deposit = depositService.newDeposit(customer, dto.getAmount());
+        org.jboss.examples.bankplus.transactions.model.Deposit deposit = depositService.newDeposit(customer, dto.getAmount());
         return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(deposit.getId())).build())
                 .build();
     }

@@ -1,40 +1,39 @@
-package org.jboss.examples.bankplus.customer.rest.dto;
+package org.jboss.examples.bankplus.customer.rest.representations;
 
-import org.jboss.examples.bankplus.customer.model.CustomerAccount;
 import org.jboss.examples.bankplus.money.model.Money;
 
 import javax.persistence.EntityManager;
 import java.io.Serializable;
 import java.util.Date;
 
-public class CustomerAccountDTO implements Serializable {
+public class CustomerAccount implements Serializable {
 
-    private Long accountId;
+    private String accountId;
     private String iban;
     private Money balance;
     private Date lastUpdatedOn;
 
-    public CustomerAccountDTO() {
+    public CustomerAccount() {
     }
 
-    public CustomerAccountDTO(final CustomerAccount entity) {
+    public CustomerAccount(final org.jboss.examples.bankplus.customer.model.CustomerAccount entity) {
         if (entity != null) {
-            this.accountId = entity.getId();
+            this.accountId = entity.getFinancialAccount().getAccountReference();
             this.iban = entity.getIban();
             this.balance = entity.getFinancialAccount().getCurrentBalance();
             this.lastUpdatedOn = entity.getFinancialAccount().getLastUpdatedOn();
         }
     }
 
-    public CustomerAccount fromDTO(CustomerAccount entity, EntityManager em) {
+    public org.jboss.examples.bankplus.customer.model.CustomerAccount fromDTO(org.jboss.examples.bankplus.customer.model.CustomerAccount entity, EntityManager em) {
         throw new IllegalStateException("This is not expected to be invoked.");
     }
 
-    public Long getAccountId() {
+    public String getAccountId() {
         return accountId;
     }
 
-    public void setAccountId(Long accountId) {
+    public void setAccountId(String accountId) {
         this.accountId = accountId;
     }
 

@@ -1,23 +1,20 @@
-package org.jboss.examples.bankplus.customer.rest.dto;
-
-import java.io.Serializable;
-
-import org.jboss.examples.bankplus.customer.model.Contact;
+package org.jboss.examples.bankplus.customer.rest.representations;
 
 import javax.persistence.EntityManager;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
 
 @XmlRootElement
-public class ContactDTO implements Serializable {
+public class Contact implements Serializable {
 
     private Long id;
     private String fullName;
     private String iban;
 
-    public ContactDTO() {
+    public Contact() {
     }
 
-    public ContactDTO(final Contact entity) {
+    public Contact(final org.jboss.examples.bankplus.customer.model.Contact entity) {
         if (entity != null) {
             this.id = entity.getId();
             this.fullName = entity.getFullName();
@@ -25,9 +22,9 @@ public class ContactDTO implements Serializable {
         }
     }
 
-    public Contact fromDTO(Contact entity, EntityManager em) {
+    public org.jboss.examples.bankplus.customer.model.Contact fromDTO(org.jboss.examples.bankplus.customer.model.Contact entity, EntityManager em) {
         if (entity == null) {
-            entity = new Contact();
+            entity = new org.jboss.examples.bankplus.customer.model.Contact();
         }
         entity.setFullName(this.fullName);
         entity.setIban(this.iban);

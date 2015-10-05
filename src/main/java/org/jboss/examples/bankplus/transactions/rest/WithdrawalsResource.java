@@ -1,8 +1,7 @@
 package org.jboss.examples.bankplus.transactions.rest;
 
 import org.jboss.examples.bankplus.transactions.model.Customer;
-import org.jboss.examples.bankplus.transactions.model.Withdrawal;
-import org.jboss.examples.bankplus.transactions.rest.dto.WithdrawalDTO;
+import org.jboss.examples.bankplus.transactions.rest.representation.Withdrawal;
 import org.jboss.examples.bankplus.transactions.services.WithdrawalService;
 import org.jboss.examples.bankplus.transactions.services.client.Customers;
 
@@ -28,10 +27,10 @@ public class WithdrawalsResource {
 
     @POST
     @Consumes("application/json")
-    public Response create(WithdrawalDTO dto) {
+    public Response create(Withdrawal dto) {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = customers.findById(customerId);
-        Withdrawal withdrawal = withdrawalService.newWithdrawal(customer, dto.getAmount());
+        org.jboss.examples.bankplus.transactions.model.Withdrawal withdrawal = withdrawalService.newWithdrawal(customer, dto.getAmount());
         return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(withdrawal.getId())).build())
                 .build();
     }

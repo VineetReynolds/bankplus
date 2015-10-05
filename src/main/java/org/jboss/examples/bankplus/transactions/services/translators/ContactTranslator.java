@@ -1,18 +1,17 @@
 package org.jboss.examples.bankplus.transactions.services.translators;
 
-import org.jboss.examples.bankplus.transactions.model.Contact;
+import org.jboss.examples.bankplus.customer.rest.representations.Contact;
 
 public class ContactTranslator {
 
-    public Contact translate(org.jboss.examples.bankplus.customer.model.Contact container) {
-        Contact contact = null;
+    public org.jboss.examples.bankplus.transactions.model.Contact translate(Contact container) {
+        org.jboss.examples.bankplus.transactions.model.Contact contact = null;
         if(container != null) {
-            contact = new Contact();
+            contact = new org.jboss.examples.bankplus.transactions.model.Contact();
             contact.setContactReference(Long.toString(container.getId()));
             contact.setFullName(container.getFullName());
             contact.setIban(container.getIban());
         }
         return contact;
     }
-
 }

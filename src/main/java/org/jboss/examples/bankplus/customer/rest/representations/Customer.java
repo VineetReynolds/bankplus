@@ -1,14 +1,11 @@
-package org.jboss.examples.bankplus.customer.rest.dto;
-
-import java.io.Serializable;
-
-import org.jboss.examples.bankplus.customer.model.Customer;
+package org.jboss.examples.bankplus.customer.rest.representations;
 
 import javax.persistence.EntityManager;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.io.Serializable;
 
 @XmlRootElement
-public class CustomerDTO implements Serializable {
+public class Customer implements Serializable {
 
     private Long id;
     private String fullName;
@@ -16,12 +13,12 @@ public class CustomerDTO implements Serializable {
     private String emailAddress;
     private String phoneNumber;
     private String mobileNumber;
-    private CustomerAccountDTO account;
+    private CustomerAccount account;
 
-    public CustomerDTO() {
+    public Customer() {
     }
 
-    public CustomerDTO(final Customer entity) {
+    public Customer(final org.jboss.examples.bankplus.customer.model.Customer entity) {
         if (entity != null) {
             this.id = entity.getId();
             this.fullName = entity.getFullName();
@@ -29,13 +26,13 @@ public class CustomerDTO implements Serializable {
             this.emailAddress = entity.getEmailAddress();
             this.phoneNumber = entity.getPhoneNumber();
             this.mobileNumber = entity.getMobileNumber();
-            this.account = new CustomerAccountDTO(entity.getCustomerAccount());
+            this.account = new CustomerAccount(entity.getCustomerAccount());
         }
     }
 
-    public Customer fromDTO(Customer entity, EntityManager em) {
+    public org.jboss.examples.bankplus.customer.model.Customer fromDTO(org.jboss.examples.bankplus.customer.model.Customer entity, EntityManager em) {
         if (entity == null) {
-            entity = new Customer();
+            entity = new org.jboss.examples.bankplus.customer.model.Customer();
         }
         entity.setFullName(this.fullName);
         entity.setMailingAddress(this.mailingAddress);
@@ -94,11 +91,11 @@ public class CustomerDTO implements Serializable {
         this.mobileNumber = mobileNumber;
     }
 
-    public CustomerAccountDTO getAccount() {
+    public CustomerAccount getAccount() {
         return account;
     }
 
-    public void setAccount(CustomerAccountDTO account) {
+    public void setAccount(CustomerAccount account) {
         this.account = account;
     }
 }

@@ -1,20 +1,18 @@
-package org.jboss.examples.bankplus.transactions.rest.dto;
-
-import org.jboss.examples.bankplus.transactions.model.Withdrawal;
+package org.jboss.examples.bankplus.transactions.rest.representation;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
 @XmlRootElement
-public class WithdrawalDTO implements Serializable {
+public class Withdrawal implements Serializable {
 
     private BigDecimal amount;
 
-    public WithdrawalDTO() {
+    public Withdrawal() {
     }
 
-    public WithdrawalDTO(final Withdrawal entity) {
+    public Withdrawal(final org.jboss.examples.bankplus.transactions.model.Withdrawal entity) {
         if (entity != null) {
             this.amount = entity.getWithdrawalAmount().getAmount();
         }

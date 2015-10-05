@@ -1,7 +1,6 @@
 package org.jboss.examples.bankplus.accounting.rest;
 
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
-import org.jboss.examples.bankplus.accounting.rest.representation.JournalEntryRepresentation;
+import org.jboss.examples.bankplus.accounting.rest.representations.JournalEntry;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.accounting.services.Journal;
 
@@ -27,8 +26,8 @@ public class JournalResource {
     @POST
     @Consumes("application/json")
     @Produces("application/json")
-    public Response create(Set<JournalEntryRepresentation> uploadedJournalEntries) {
-        Set<JournalEntry> entries = JournalEntryRepresentation.from(uploadedJournalEntries, accounts);
+    public Response create(Set<JournalEntry> uploadedJournalEntries) {
+        Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = JournalEntry.from(uploadedJournalEntries, accounts);
         journal.postToLedger(entries);
         return Response.accepted()
                 .build();

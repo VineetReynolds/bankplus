@@ -2,8 +2,7 @@ package org.jboss.examples.bankplus.transactions.rest;
 
 import org.jboss.examples.bankplus.transactions.model.Contact;
 import org.jboss.examples.bankplus.transactions.model.Customer;
-import org.jboss.examples.bankplus.transactions.model.Payment;
-import org.jboss.examples.bankplus.transactions.rest.dto.PaymentDTO;
+import org.jboss.examples.bankplus.transactions.rest.representation.Payment;
 import org.jboss.examples.bankplus.transactions.services.PaymentException;
 import org.jboss.examples.bankplus.transactions.services.PaymentService;
 import org.jboss.examples.bankplus.transactions.services.client.Contacts;
@@ -39,18 +38,18 @@ public class PaymentsResource {
 
     @POST
     @Consumes("application/json")
-    public Response create(PaymentDTO dto) {
+    public Response create(Payment dto) {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer from = customers.findById(customerId);
         Long payeeId = dto.getPayeeId();
         if(payeeId == null) {
             throw new PaymentException("Contact was not specified.");
         }
-        Contact to = contacts.findById(payeeId);
+        Contact to = contacts.findById(payeeId, customerId);
         if(to == null) {
             throw new PaymentException("Contact was not specified.");
         }
-        Payment payment = paymentService.newOutgoingPayment(from, to, dto.getAmount());
+        org.jboss.examples.bankplus.transactions.model.Payment payment = paymentService.newOutgoingPayment(from, to, dto.getAmount());
         return Response.created(uriInfo.getAbsolutePathBuilder().path(String.valueOf(payment.getId())).build())
                 .build();
     }

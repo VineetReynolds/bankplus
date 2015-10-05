@@ -1,20 +1,18 @@
-package org.jboss.examples.bankplus.transactions.rest.dto;
-
-import org.jboss.examples.bankplus.transactions.model.Deposit;
+package org.jboss.examples.bankplus.transactions.rest.representation;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
 @XmlRootElement
-public class DepositDTO implements Serializable {
+public class Deposit implements Serializable {
 
     private BigDecimal amount;
 
-    public DepositDTO() {
+    public Deposit() {
     }
 
-    public DepositDTO(final Deposit entity) {
+    public Deposit(final org.jboss.examples.bankplus.transactions.model.Deposit entity) {
         if (entity != null) {
             this.amount = entity.getDepositAmount().getAmount();
         }

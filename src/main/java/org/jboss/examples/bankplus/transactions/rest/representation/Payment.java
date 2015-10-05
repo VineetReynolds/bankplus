@@ -1,16 +1,22 @@
-package org.jboss.examples.bankplus.transactions.rest.dto;
+package org.jboss.examples.bankplus.transactions.rest.representation;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.Serializable;
 import java.math.BigDecimal;
 
 @XmlRootElement
-public class PaymentDTO implements Serializable {
+public class Payment implements Serializable {
 
     private BigDecimal amount;
     private Long payeeId;
 
-    public PaymentDTO() {
+    public Payment() {
+    }
+
+    public Payment(final org.jboss.examples.bankplus.transactions.model.Payment entity) {
+        if (entity != null) {
+            this.amount = entity.getPaymentAmount().getAmount();
+        }
     }
 
     public BigDecimal getAmount() {

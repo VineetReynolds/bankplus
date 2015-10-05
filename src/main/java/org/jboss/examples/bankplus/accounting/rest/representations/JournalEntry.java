@@ -1,8 +1,7 @@
-package org.jboss.examples.bankplus.accounting.rest.representation;
+package org.jboss.examples.bankplus.accounting.rest.representations;
 
 import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.model.EntryType;
-import org.jboss.examples.bankplus.accounting.model.JournalEntry;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
 import org.jboss.examples.bankplus.money.model.Money;
 
@@ -13,27 +12,27 @@ import java.util.HashSet;
 import java.util.Set;
 
 @XmlRootElement
-public class JournalEntryRepresentation implements Serializable {
+public class JournalEntry implements Serializable {
 
-    private AccountRepresentation account;
+    private String accountId;
     private Money amount;
     private Date dateTime;
     private Long eventReference;
     private String description;
     private EntryType type;
 
-    public static Set<JournalEntry> from(Set<JournalEntryRepresentation> uploadedJournalEntries, Accounts accounts) {
-        Set<JournalEntry> entries = new HashSet<>();
-        for (JournalEntryRepresentation uploadedJournalEntry : uploadedJournalEntries) {
-            JournalEntry entry = from(uploadedJournalEntry, accounts);
+    public static Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> from(Set<JournalEntry> uploadedJournalEntries, Accounts accounts) {
+        Set<org.jboss.examples.bankplus.accounting.model.JournalEntry> entries = new HashSet<>();
+        for (JournalEntry uploadedJournalEntry : uploadedJournalEntries) {
+            org.jboss.examples.bankplus.accounting.model.JournalEntry entry = from(uploadedJournalEntry, accounts);
             entries.add(entry);
         }
         return entries;
     }
 
-    private static JournalEntry from(JournalEntryRepresentation uploadedJournalEntry, Accounts accounts) {
-        JournalEntry journalEntry = new JournalEntry();
-        Account account = accounts.findByAccountId(uploadedJournalEntry.getAccount().getAccountReference());
+    private static org.jboss.examples.bankplus.accounting.model.JournalEntry from(JournalEntry uploadedJournalEntry, Accounts accounts) {
+        org.jboss.examples.bankplus.accounting.model.JournalEntry journalEntry = new org.jboss.examples.bankplus.accounting.model.JournalEntry();
+        Account account = accounts.findByAccountId(uploadedJournalEntry.getAccountId());
         journalEntry.setAccount(account);
         journalEntry.setAmount(uploadedJournalEntry.getAmount());
         journalEntry.setEventReference(uploadedJournalEntry.getEventReference());
@@ -43,12 +42,12 @@ public class JournalEntryRepresentation implements Serializable {
         return journalEntry;
     }
 
-    public AccountRepresentation getAccount() {
-        return account;
+    public String getAccountId() {
+        return accountId;
     }
 
-    public void setAccount(AccountRepresentation account) {
-        this.account = account;
+    public void setAccountId(String accountId) {
+        this.accountId = accountId;
     }
 
     public Money getAmount() {

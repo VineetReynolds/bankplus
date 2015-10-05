@@ -90,6 +90,11 @@ public class Accounts {
         return liabiltiesAccount;
     }
 
+    public List<Account> listAll() {
+        TypedQuery<Account> findAllAccountsQuery = em.createQuery("SELECT DISTINCT a FROM Account a ORDER BY a.id", Account.class);
+        return findAllAccountsQuery.getResultList();
+    }
+
     public List<Account> listLeafAccounts() {
         TypedQuery<Account> findAllLeafAccountsQuery = em.createQuery("SELECT DISTINCT a FROM Account a WHERE a.parentAccount != NULL AND a.childAccounts.size = 0 ORDER BY a.id", Account.class);
         return findAllLeafAccountsQuery.getResultList();

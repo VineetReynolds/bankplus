@@ -1,8 +1,8 @@
 package org.jboss.examples.bankplus.transactions.services.translators;
 
-import org.jboss.examples.bankplus.accounting.model.Account;
 import org.jboss.examples.bankplus.accounting.services.Accounts;
-import org.jboss.examples.bankplus.transactions.model.CustomerAccount;
+import org.jboss.examples.bankplus.customer.rest.representations.CustomerAccount;
+import org.jboss.examples.bankplus.transactions.model.Account;
 
 import javax.inject.Inject;
 
@@ -14,12 +14,14 @@ public class CustomerAccountTranslator {
     @Inject
     private Accounts accounts;
 
-    public CustomerAccount translate(org.jboss.examples.bankplus.customer.model.CustomerAccount container) {
-        CustomerAccount customerAccount = null;
+    public org.jboss.examples.bankplus.transactions.model.CustomerAccount translate(CustomerAccount container) {
+        org.jboss.examples.bankplus.transactions.model.CustomerAccount customerAccount = null;
         if(container != null) {
-            customerAccount = new CustomerAccount();
-            Account accountContainer = accounts.findByAccountId(container.getFinancialAccount().getAccountReference());
-            customerAccount.setFinancialAccount(accountTranslator.translate(accountContainer));
+            customerAccount = new org.jboss.examples.bankplus.transactions.model.CustomerAccount();
+            Account financialAccount = new Account();
+            financialAccount.setAccountReference(container.getAccountId());
+            financialAccount.setCurrentBalance(container.getBalance());
+            customerAccount.setFinancialAccount(financialAccount);
         }
         return customerAccount;
     }

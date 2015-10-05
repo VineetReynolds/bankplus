@@ -1,7 +1,6 @@
 package org.jboss.examples.bankplus.customer.rest;
 
-import org.jboss.examples.bankplus.customer.model.Customer;
-import org.jboss.examples.bankplus.customer.rest.dto.CustomerDTO;
+import org.jboss.examples.bankplus.customer.rest.representations.Customer;
 import org.jboss.examples.bankplus.reporting.rest.ReportsResource;
 import org.jboss.examples.bankplus.customer.services.CustomerService;
 import org.jboss.examples.bankplus.customer.services.CustomerUpdateException;
@@ -56,10 +55,10 @@ public class CustomerResource {
     @POST
     @Consumes("application/json")
     @Produces("application/json")
-    public Response create(CustomerDTO dto) {
-        Customer customer = customerService.create(dto);
+    public Response create(Customer dto) {
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.create(dto);
         return Response.created(UriBuilder.fromResource(CustomerResource.class).path(String.valueOf(customer.getId())).build())
-                .entity(new CustomerDTO(customer))
+                .entity(new Customer(customer))
                 .build();
     }
 
@@ -80,33 +79,40 @@ public class CustomerResource {
     @Path("/{id:[0-9][0-9]*}")
     @Produces("application/json")
     public Response findById(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             return Response.status(Status.NOT_FOUND)
                     .build();
         }
-        CustomerDTO dto = new CustomerDTO(customer);
+        Customer dto = new Customer(customer);
         return Response.ok(dto)
                 .build();
     }
 
     @GET
     @Produces("application/json")
-    public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult, @QueryParam("email") String email) {
-        List<Customer> searchResults = customerService.listAll(startPosition, maxResult, email);
-        final List<CustomerDTO> results = new ArrayList<CustomerDTO>();
-        for (Customer searchResult : searchResults) {
-            CustomerDTO dto = new CustomerDTO(searchResult);
-            results.add(dto);
+    public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult,  @QueryParam("iban") String iban, @QueryParam("email") String email) {
+        if (iban == null || iban.isEmpty()) {
+            List<org.jboss.examples.bankplus.customer.model.Customer> searchResults = customerService.listAll(startPosition, maxResult, email);
+            final List<Customer> results = new ArrayList<Customer>();
+            for (org.jboss.examples.bankplus.customer.model.Customer searchResult : searchResults) {
+                Customer dto = new Customer(searchResult);
+                results.add(dto);
+            }
+            return Response.ok(results)
+                    .build();
+        } else {
+            org.jboss.examples.bankplus.customer.model.Customer match = customerService.findByIBAN(iban);
+            Customer dto = new Customer(match);
+            return Response.ok(dto).build();
         }
-        return Response.ok(results)
-                .build();
+
     }
 
     @PUT
     @Path("/{id:[0-9][0-9]*}")
     @Consumes("application/json")
-    public Response update(@PathParam("id") Long id, CustomerDTO dto) {
+    public Response update(@PathParam("id") Long id, Customer dto) {
         if (dto == null) {
             return Response.status(Status.BAD_REQUEST)
                     .build();
@@ -116,12 +122,12 @@ public class CustomerResource {
                     .build();
         }
         try {
-            Customer updatedCustomer = customerService.update(dto);
+            org.jboss.examples.bankplus.customer.model.Customer updatedCustomer = customerService.update(dto);
             if (updatedCustomer == null) {
                 return Response.status(Status.NOT_FOUND)
                         .build();
             }
-            CustomerDTO responseDto = new CustomerDTO(updatedCustomer);
+            Customer responseDto = new Customer(updatedCustomer);
             return Response.ok(responseDto)
                     .build();
         } catch (CustomerUpdateException e) {
@@ -133,7 +139,7 @@ public class CustomerResource {
 
     @Path("/{id:[0-9][0-9]*}/contacts")
     public ContactResource getContactResource(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             throw new WebApplicationException(Status.NOT_FOUND);
         }
@@ -142,7 +148,7 @@ public class CustomerResource {
 
     @Path("/{id:[0-9][0-9]*}/deposits")
     public DepositsResource getDepositsResource(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             throw new WebApplicationException(Status.NOT_FOUND);
         }
@@ -151,7 +157,7 @@ public class CustomerResource {
 
     @Path("/{id:[0-9][0-9]*}/withdrawals")
     public WithdrawalsResource getWithdrawalsResource(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             throw new WebApplicationException(Status.NOT_FOUND);
         }
@@ -160,7 +166,7 @@ public class CustomerResource {
 
     @Path("/{id:[0-9][0-9]*}/payments")
     public PaymentsResource getPaymentsResource(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             throw new WebApplicationException(Status.NOT_FOUND);
         }
@@ -169,7 +175,7 @@ public class CustomerResource {
 
     @Path("/{id:[0-9][0-9]*}/reports")
     public ReportsResource getReportResource(@PathParam("id") Long id) {
-        Customer customer = customerService.findById(id);
+        org.jboss.examples.bankplus.customer.model.Customer customer = customerService.findById(id);
         if (customer == null) {
             throw new WebApplicationException(Status.NOT_FOUND);
         }

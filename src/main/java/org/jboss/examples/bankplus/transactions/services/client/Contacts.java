@@ -10,7 +10,7 @@ public class Contacts {
     @Inject
     private ContactsAdapter adapter;
 
-    public Contact findById(Long payeeId) {
-        return adapter.findById(payeeId);
+    public Contact findById(Long payeeId, Long customerId) {
+        return adapter.findById(payeeId, customerId);
     }
 }

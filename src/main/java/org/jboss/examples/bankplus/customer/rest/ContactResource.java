@@ -24,8 +24,7 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
 import org.jboss.examples.bankplus.customer.model.Customer;
-import org.jboss.examples.bankplus.customer.rest.dto.ContactDTO;
-import org.jboss.examples.bankplus.customer.model.Contact;
+import org.jboss.examples.bankplus.customer.rest.representations.Contact;
 
 /**
  *
@@ -41,8 +40,8 @@ public class ContactResource {
 
     @POST
     @Consumes("application/json")
-    public Response create(ContactDTO dto) {
-        Contact entity = dto.fromDTO(null, em);
+    public Response create(Contact dto) {
+        org.jboss.examples.bankplus.customer.model.Contact entity = dto.fromDTO(null, em);
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = em.find(Customer.class, customerId);
         entity.setCustomer(customer);
@@ -56,7 +55,7 @@ public class ContactResource {
     @DELETE
     @Path("/{id:[0-9][0-9]*}")
     public Response deleteById(@PathParam("id") Long id) {
-        Contact entity = em.find(Contact.class, id);
+        org.jboss.examples.bankplus.customer.model.Contact entity = em.find(org.jboss.examples.bankplus.customer.model.Contact.class, id);
         if (entity == null) {
             return Response.status(Status.NOT_FOUND)
                     .build();
@@ -70,9 +69,9 @@ public class ContactResource {
     @Path("/{id:[0-9][0-9]*}")
     @Produces("application/json")
     public Response findById(@PathParam("id") Long id) {
-        TypedQuery<Contact> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.id = :entityId ORDER BY c.id", Contact.class);
+        TypedQuery<org.jboss.examples.bankplus.customer.model.Contact> findByIdQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.id = :entityId ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Contact.class);
         findByIdQuery.setParameter("entityId", id);
-        Contact entity;
+        org.jboss.examples.bankplus.customer.model.Contact entity;
         try {
             entity = findByIdQuery.getSingleResult();
         } catch (NoResultException nre) {
@@ -82,7 +81,7 @@ public class ContactResource {
             return Response.status(Status.NOT_FOUND)
                     .build();
         }
-        ContactDTO dto = new ContactDTO(entity);
+        Contact dto = new Contact(entity);
         return Response.ok(dto)
                 .build();
     }
@@ -90,7 +89,7 @@ public class ContactResource {
     @GET
     @Produces("application/json")
     public Response listAll(@QueryParam("start") Integer startPosition, @QueryParam("max") Integer maxResult) {
-        TypedQuery<Contact> findAllQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.customer = :customer ORDER BY c.id", Contact.class);
+        TypedQuery<org.jboss.examples.bankplus.customer.model.Contact> findAllQuery = em.createQuery("SELECT DISTINCT c FROM Contact c WHERE c.customer = :customer ORDER BY c.id", org.jboss.examples.bankplus.customer.model.Contact.class);
         if (startPosition != null) {
             findAllQuery.setFirstResult(startPosition);
         }
@@ -100,10 +99,10 @@ public class ContactResource {
         Long customerId = Long.parseLong(uriInfo.getPathParameters().getFirst("id"));
         Customer customer = em.find(Customer.class, customerId);
         findAllQuery.setParameter("customer", customer);
-        final List<Contact> searchResults = findAllQuery.getResultList();
-        final List<ContactDTO> results = new ArrayList<ContactDTO>();
-        for (Contact searchResult : searchResults) {
-            ContactDTO dto = new ContactDTO(searchResult);
+        final List<org.jboss.examples.bankplus.customer.model.Contact> searchResults = findAllQuery.getResultList();
+        final List<Contact> results = new ArrayList<Contact>();
+        for (org.jboss.examples.bankplus.customer.model.Contact searchResult : searchResults) {
+            Contact dto = new Contact(searchResult);
             results.add(dto);
         }
         return Response.ok(results)
@@ -113,7 +112,7 @@ public class ContactResource {
     @PUT
     @Path("/{id:[0-9][0-9]*}")
     @Consumes("application/json")
-    public Response update(@PathParam("id") Long id, ContactDTO dto) {
+    public Response update(@PathParam("id") Long id, Contact dto) {
         if (dto == null) {
             return Response.status(Status.BAD_REQUEST)
                     .build();
@@ -122,7 +121,7 @@ public class ContactResource {
             return Response.status(Status.CONFLICT).entity(dto)
                     .build();
         }
-        Contact entity = em.find(Contact.class, id);
+        org.jboss.examples.bankplus.customer.model.Contact entity = em.find(org.jboss.examples.bankplus.customer.model.Contact.class, id);
         if (entity == null) {
             return Response.status(Status.NOT_FOUND)
                     .build();
@@ -134,7 +133,7 @@ public class ContactResource {
             return Response.status(Status.CONFLICT).entity(e.getEntity())
                     .build();
         }
-        ContactDTO updatedDTO = new ContactDTO(entity);
+        Contact updatedDTO = new Contact(entity);
         return Response.ok(updatedDTO)
                 .build();
     }
