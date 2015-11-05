@@ -72,7 +72,17 @@ module.exports = function (grunt) {
         livereload: 35729
       },
       proxies: [{
-        context: '/bankplus/rest', // the context of the backend data service
+        context: '/bankplus-customers/rest', // the context of the backend data service
+        host: 'localhost', // wherever the data service is running
+        port: 9080 // the port that the data service is running on
+      },
+      {
+        context: '/bankplus-transactions/rest', // the context of the backend data service
+        host: 'localhost', // wherever the data service is running
+        port: 9080 // the port that the data service is running on
+      },
+      {
+        context: '/bankplus-reporting/rest', // the context of the backend data service
         host: 'localhost', // wherever the data service is running
         port: 9080 // the port that the data service is running on
       }],
