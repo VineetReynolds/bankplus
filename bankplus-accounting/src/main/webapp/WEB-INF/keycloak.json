@@ -1,0 +1,8 @@
+{
+  "realm": "bankplus",
+  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtwx9PREiGACFe7qqFZIkChif7TsEwl/qwEw841J2bAbqQK9RR3RBXJalb5IYxQ5r/s0p5F2qvuiUY92tzxv180at1xHgGXIHCOcHecXZ9lLQrCsXda9YR20forLZRshyB0R1EOrt+iu+GPLz/MqdEtHfWI/PR4FZ0TxcPkeJcDGlSShZr9qirApu/R1an3SJJqvCn1Ky6smEELjWVtXCEtP0hNJS+R5e8MeAWHVVH6vxZoiYP85sdUu06pxuaJJrXxs/K5bII3XRqSVcB1MhR7wigMW3dTVWqMojAxiPoX3xGVkqzuCc6oLoYGT4i9oS13O+Z6letqrd4m2oiSCpiwIDAQAB",
+  "bearer-only": true,
+  "auth-server-url": "http://localhost:8080/auth",
+  "ssl-required": "external",
+  "resource": "Customer Service"
+}
