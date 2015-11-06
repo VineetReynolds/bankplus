@@ -11,7 +11,7 @@ import javax.ws.rs.core.MediaType;
 public class IncomingPaymentsAdapter {
     public void newIncomingPayment(IncomingPayment paymentMessage) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-transactions/rest/").path("incomingpayments");
+        WebTarget target = client.target("http://localhost:13080/bankplus-transactions/rest/").path("incomingpayments");
 
         target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.json(paymentMessage));
     }

@@ -16,14 +16,14 @@ public class CustomerAdapter {
 
     public org.jboss.examples.bankplus.transactions.model.Customer findById(Long customerId) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-customers/rest/").path("customers/{customerId}").resolveTemplate("customerId", customerId);
+        WebTarget target = client.target("http://localhost:10080/bankplus-customers/rest/").path("customers/{customerId}").resolveTemplate("customerId", customerId);
         Customer customer = target.request(MediaType.APPLICATION_JSON_TYPE).get(Customer.class);
         return translator.translate(customer);
     }
 
     public org.jboss.examples.bankplus.transactions.model.Customer findByIBAN(String iban) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-customers/rest/").path("customers/").queryParam("iban", iban);
+        WebTarget target = client.target("http://localhost:10080/bankplus-customers/rest/").path("customers/").queryParam("iban", iban);
         Customer customer = target.request(MediaType.APPLICATION_JSON_TYPE).get(Customer.class);
         return translator.translate(customer);
     }

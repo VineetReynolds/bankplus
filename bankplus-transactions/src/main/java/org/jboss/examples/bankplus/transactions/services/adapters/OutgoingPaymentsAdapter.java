@@ -12,7 +12,7 @@ public class OutgoingPaymentsAdapter {
 
     public void publishMessage(OutgoingPaymentMessage paymentMessage) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-messaging/rest/").path("outgoingpayments");
+        WebTarget target = client.target("http://localhost:11080/bankplus-messaging/rest/").path("outgoingpayments");
 
         target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.json(paymentMessage));
     }

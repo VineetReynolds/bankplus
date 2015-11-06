@@ -16,7 +16,7 @@ public class ContactsAdapter {
 
     public org.jboss.examples.bankplus.transactions.model.Contact findById(Long contactId, Long customerId) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-customers/rest/").path("customers/{customerId}/contacts/{contactId}")
+        WebTarget target = client.target("http://localhost:10080/bankplus-customers/rest/").path("customers/{customerId}/contacts/{contactId}")
                 .resolveTemplate("customerId", customerId)
                 .resolveTemplate("contactId", contactId);
         Contact contact = target.request(MediaType.APPLICATION_JSON_TYPE).get(Contact.class);
