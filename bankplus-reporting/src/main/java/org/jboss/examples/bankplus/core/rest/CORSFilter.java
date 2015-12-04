@@ -18,7 +18,7 @@ public class CORSFilter implements ContainerResponseFilter
             "GET, POST, PUT, DELETE, OPTIONS, HEAD");
       response.getHeaders()
             .putSingle("Access-Control-Allow-Headers",
-                  "Content-Type, User-Agent, X-Requested-With, X-Requested-By, Cache-Control");
+                    "Accept, Authorization, Content-Type, User-Agent, X-Requested-With, X-Requested-By, Cache-Control");
       response.getHeaders().putSingle("Access-Control-Allow-Credentials",
             "true");
    }

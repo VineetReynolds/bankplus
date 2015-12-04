@@ -1,0 +1,32 @@
+#SkyDNS and SkyDock to provide DNS and service discovery for docker containers
+skydns:
+    image: crosbymichael/skydns
+    ports:
+        - "172.17.0.1:53:53/udp"
+    hostname: skydns
+    command: "-nameserver 8.8.8.8:53 -domain docker"
+skydock:
+    image: crosbymichael/skydock
+    links:
+        - skydns
+    volumes:
+        - /var/run/docker.sock:/docker.sock
+    command: "-ttl=30 -environment=dev -s=/docker.sock -domain=docker -name=bankplus_skydns_1"
+frontend:
+    image: bankplus-frontend
+    ports:
+        - "80:80"
+keycloak:
+    image: bankplus-keycloak
+    ports:
+        - "8080:8080"
+accounting:
+    build: ./bankplus-accounting
+customers:
+    build: ./bankplus-customers
+transactions:
+    build: ./bankplus-transactions
+messaging:
+    build: ./bankplus-messaging
+reporting:
+    build: ./bankplus-reporting

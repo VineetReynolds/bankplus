@@ -7,12 +7,29 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriBuilder;
 
 public class OutgoingPaymentsAdapter {
 
+    private static final String host;
+
+    private static final int port;
+
+    static {
+        String envHost = System.getenv("MESSAGING_PORT_8080_TCP_ADDR");
+        host = envHost == null ? "bankplus_messaging.dev.docker" : envHost;
+        String envPort = System.getenv("MESSAGING_PORT_8080_TCP_PORT");
+        port = envPort == null ? 8080 : Integer.parseInt(envPort);
+    }
+
+
     public void publishMessage(OutgoingPaymentMessage paymentMessage) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:11080/bankplus-messaging/rest/").path("outgoingpayments");
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-messaging/rest/")
+                .path("outgoingpayments")
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
 
         target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.json(paymentMessage));
     }

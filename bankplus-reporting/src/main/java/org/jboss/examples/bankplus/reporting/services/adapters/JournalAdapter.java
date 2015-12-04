@@ -9,6 +9,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriBuilder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -22,6 +23,17 @@ public class JournalAdapter {
     @Inject
     private JournalEntryTranslator translator;
 
+    private static final String host;
+
+    private static final int port;
+
+    static {
+        String envHost = System.getenv("ACCOUNTING_PORT_8080_TCP_ADDR");
+        host = envHost == null ? "bankplus_accounting.dev.docker" : envHost;
+        String envPort = System.getenv("ACCOUNTING_PORT_8080_TCP_PORT");
+        port = envPort == null ? 8080 : Integer.parseInt(envPort);
+    }
+
     public List<org.jboss.examples.bankplus.reporting.model.JournalEntry> getEntriesForMonth(String accountId) {
         Instant start = LocalDate.now()
                 .withDayOfMonth(1)
@@ -32,7 +44,13 @@ public class JournalAdapter {
                 .format(start);
 
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("journal").queryParam("accountId", accountId).queryParam("start", monthStart);
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("journal")
+                .queryParam("accountId", accountId)
+                .queryParam("start", monthStart)
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
 
         GenericType<List<JournalEntry>> journalEntryType = new GenericType<List<JournalEntry>>() {};
         List<JournalEntry> entries = target.request(MediaType.APPLICATION_JSON_TYPE).get(journalEntryType);
@@ -51,7 +69,13 @@ public class JournalAdapter {
                 .format(start);
 
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("journal").queryParam("accountId", accountId).queryParam("start", yearStart);
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("journal")
+                .queryParam("accountId", accountId)
+                .queryParam("start", yearStart)
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
 
         GenericType<List<JournalEntry>> journalEntryType = new GenericType<List<JournalEntry>>() {};
         List<JournalEntry> entries = target.request(MediaType.APPLICATION_JSON_TYPE).get(journalEntryType);
@@ -79,7 +103,14 @@ public class JournalAdapter {
         }
 
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("journal").queryParam("accountId", accountId).queryParam("start", rangeStart).queryParam("end", rangeEnd);
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("journal")
+                .queryParam("accountId", accountId)
+                .queryParam("start", rangeStart)
+                .queryParam("end", rangeEnd)
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
 
         GenericType<List<JournalEntry>> journalEntryType = new GenericType<List<JournalEntry>>() {};
         List<JournalEntry> entries = target.request(MediaType.APPLICATION_JSON_TYPE).get(journalEntryType);

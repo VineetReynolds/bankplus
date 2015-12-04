@@ -6,12 +6,24 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriBuilder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 public class AccountBalanceAdapter {
+
+    private static final String host;
+
+    private static final int port;
+
+    static {
+        String envHost = System.getenv("ACCOUNTING_PORT_8080_TCP_ADDR");
+        host = envHost == null ? "bankplus_accounting.dev.docker" : envHost;
+        String envPort = System.getenv("ACCOUNTING_PORT_8080_TCP_PORT");
+        port = envPort == null ? 8080 : Integer.parseInt(envPort);
+    }
 
     public AccountBalance getBalance(String accountId, LocalDate from) {
         String rangeStart = null;
@@ -24,8 +36,13 @@ public class AccountBalanceAdapter {
         }
 
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("accountbalances")
-                .queryParam("accountId", accountId).queryParam("date", rangeStart);
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("accountbalances")
+                .queryParam("accountId", accountId)
+                .queryParam("date", rangeStart)
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
         AccountBalance accountBalance = target.request(MediaType.APPLICATION_JSON_TYPE).get(AccountBalance.class);
         return accountBalance;
     }

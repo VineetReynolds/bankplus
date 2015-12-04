@@ -11,16 +11,32 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriBuilder;
 
 public class AccountsAdapter {
 
     @Inject
     private AccountTranslator translator;
 
+    private static final String host;
+
+    private static final int port;
+
+    static {
+        String envHost = System.getenv("ACCOUNTING_PORT_8080_TCP_ADDR");
+        host = envHost == null ? "bankplus_accounting.dev.docker" : envHost;
+        String envPort = System.getenv("ACCOUNTING_PORT_8080_TCP_PORT");
+        port = envPort == null ? 8080 : Integer.parseInt(envPort);
+    }
+
     public org.jboss.examples.bankplus.customer.model.Account getLiabilitiesAccount() {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("accounts")
-                .queryParam("type", "liabilities");
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("accounts")
+                .queryParam("type", "liabilities")
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
         org.jboss.examples.bankplus.customer.services.adapters.Account account = target.request(MediaType.APPLICATION_JSON_TYPE).get(org.jboss.examples.bankplus.customer.services.adapters.Account.class);
         return translator.translate(account);
     }
@@ -34,16 +50,24 @@ public class AccountsAdapter {
         newAccount.setCurrentBalance(openingBalance);
 
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("accounts")
-                .queryParam("type", "liabilities");
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("accounts")
+                .queryParam("type", "liabilities")
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
         org.jboss.examples.bankplus.customer.services.adapters.Account account = target.request(MediaType.APPLICATION_JSON_TYPE).post(Entity.json(newAccount), org.jboss.examples.bankplus.customer.services.adapters.Account.class);
         return translator.translate(account);
     }
 
     public Account findByAccountId(String accountId) {
         Client client = ClientBuilder.newClient();
-        WebTarget target = client.target("http://localhost:9080/bankplus-accounting/rest/").path("accounts")
-                .queryParam("accountId", accountId);
+        UriBuilder builder = UriBuilder.fromUri("http://{host}:{port}/bankplus-accounting/rest/")
+                .path("accounts")
+                .queryParam("accountId", accountId)
+                .resolveTemplate("host", host)
+                .resolveTemplate("port", port);
+        WebTarget target = client.target(builder);
         org.jboss.examples.bankplus.customer.services.adapters.Account account = target.request(MediaType.APPLICATION_JSON_TYPE).get(org.jboss.examples.bankplus.customer.services.adapters.Account.class);
         return translator.translate(account);
     }
