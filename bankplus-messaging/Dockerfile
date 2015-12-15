@@ -1,2 +1,6 @@
-FROM jboss/wildfly:8.2.1.Final
-ADD target/bankplus-messaging.war /opt/jboss/wildfly/standalone/deployments/
+FROM java:openjdk-8-jdk
+
+ADD target/bankplus-messaging-swarm.jar /opt/bankplus-messaging-swarm.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/opt/bankplus-messaging-swarm.jar"]

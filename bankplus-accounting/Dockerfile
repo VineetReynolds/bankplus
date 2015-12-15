@@ -1,2 +1,6 @@
-FROM jboss/wildfly:8.2.1.Final
-ADD target/bankplus-accounting.war /opt/jboss/wildfly/standalone/deployments/
+FROM java:openjdk-8-jdk
+
+ADD target/bankplus-accounting-swarm.jar /opt/bankplus-accounting-swarm.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/opt/bankplus-accounting-swarm.jar"]
