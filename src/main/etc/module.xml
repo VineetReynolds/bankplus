@@ -11,7 +11,7 @@
         <module name="org.keycloak.keycloak-model-api"/>
         <module name="org.keycloak.keycloak-events-api"/>
         <module name="javax.json.api"/>
-        <module name="org.keycloak.keycloak-connections-http-client"/>
-        <module name="org.apache.httpcomponents" slot="4.3"/>
+        <module name="org.keycloak.keycloak-connections-http-client" services="import"/>
+        <module name="org.apache.httpcomponents"/>
     </dependencies>
 </module>

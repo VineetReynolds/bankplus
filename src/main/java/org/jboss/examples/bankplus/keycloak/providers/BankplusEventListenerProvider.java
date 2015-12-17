@@ -4,6 +4,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
 import org.keycloak.connections.httpclient.HttpClientBuilder;
 import org.keycloak.events.Event;
@@ -18,6 +19,8 @@ import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 public class BankplusEventListenerProvider implements EventListenerProvider {
 
@@ -48,15 +51,26 @@ public class BankplusEventListenerProvider implements EventListenerProvider {
 
                     try {
                         // Query for the user in the BankPlus REST API
+                        String envHost = System.getenv("CUSTOMERS_PORT_8080_TCP_ADDR");
+                        String host = envHost == null ? "bankplus_customers.dev.docker" : envHost;
+                        String envPort = System.getenv("CUSTOMERS_PORT_8080_TCP_PORT");
+                        int port = envPort == null ? 8080 : Integer.parseInt(envPort);
+                        URI uri = new URIBuilder()
+                                .setScheme("http")
+                                .setHost(host)
+                                .setPort(port)
+                                .setPath("/bankplus-customers/rest/customers")
+                                .build();
                         HttpGet get = new HttpGet(
-                                KeycloakUriBuilder.fromUri("http://localhost:9080/bankplus")
-                                        .path("/rest/customers/").queryParam("email", email).build());
+                                KeycloakUriBuilder
+                                        .fromUri(uri)
+                                        .queryParam("email", email)
+                                        .build());
                         HttpResponse isUserRegisteredResponse = client.execute(get);
                         if (isUserRegisteredResponse.getStatusLine().getStatusCode() != 200) {
-                            // Possible failure? Close the KeyCloak session
-                            // This prevents the user from accessing the application if there is an error during on-boarding.
-                            UserSessionModel userSession = session.sessions().getUserSession(realm, event.getSessionId());
-                            session.sessions().removeUserSession(realm, userSession);
+                            System.out.println("Failed : HTTP error code : "
+                                    + isUserRegisteredResponse.getStatusLine().getStatusCode());
+                            logoutUser(event, realm);
                             throw new RuntimeException("Failed : HTTP error code : "
                                     + isUserRegisteredResponse.getStatusLine().getStatusCode());
                         }
@@ -67,8 +81,9 @@ public class BankplusEventListenerProvider implements EventListenerProvider {
                         if (customers.isEmpty()) {
 
                             HttpPost post = new HttpPost(
-                                    KeycloakUriBuilder.fromUri("http://localhost:9080/bankplus")
-                                            .path("/rest/customers/").build());
+                                    KeycloakUriBuilder
+                                            .fromUri(uri)
+                                            .build());
 
                             JsonObject customer = Json.createObjectBuilder()
                                     .add("fullName", fullName)
@@ -82,22 +97,28 @@ public class BankplusEventListenerProvider implements EventListenerProvider {
                             HttpResponse userCreatedResponse = client.execute(post);
 
                             if (userCreatedResponse.getStatusLine().getStatusCode() != 201) {
-                                // Possible failure? Close the KeyCloak session
-                                // This prevents the user from accessing the application if there is an error during on-boarding.
-                                UserSessionModel userSession = session.sessions().getUserSession(realm, event.getSessionId());
-                                session.sessions().removeUserSession(realm, userSession);
+                                System.out.println("Failed : HTTP error code : "
+                                        + isUserRegisteredResponse.getEntity().toString());
+                                logoutUser(event, realm);
                                 throw new RuntimeException("Failed : HTTP error code : "
                                         + userCreatedResponse.getStatusLine().getStatusCode());
                             }
                         }
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                    } catch (IOException | URISyntaxException e) {
+                        throw new RuntimeException(e);
                     } finally {
                         client.getConnectionManager().shutdown();
                     }
                 }
             }
         }
+    }
+
+    private void logoutUser(Event event, RealmModel realm) {
+        // Possible failure? Close the KeyCloak session
+        // This prevents the user from accessing the application if there is an error during on-boarding.
+        UserSessionModel userSession = session.sessions().getUserSession(realm, event.getSessionId());
+        session.sessions().removeUserSession(realm, userSession);
     }
 
     @Override
