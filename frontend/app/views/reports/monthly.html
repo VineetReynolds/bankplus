@@ -1,0 +1,30 @@
+<div>
+  <h3>Monthly statement</h3>
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Withdrawals</th>
+        <th>Deposits</th>
+        <th>Balance</th>
+      </tr>
+      </thead>
+      <tbody id="results-body">
+      <tr dir-paginate="result in statementLines | itemsPerPage: 10" current-page="currentPage" ng-switch on="result.type">
+        <td>{{result.dateTime | date : 'medium'}}</td>
+        <td>{{result.description}}</td>
+        <td ng-switch-when="Withdrawal">{{result.amount.amount}}</td>
+        <td ng-switch-when="Withdrawal"></td>
+        <td ng-switch-when="Deposit"></td>
+        <td ng-switch-when="Deposit">{{result.amount.amount}}</td>
+        <td ng-switch-default></td>
+        <td ng-switch-default></td>
+        <td>{{result.balance.amount}}</td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+  <dir-pagination-controls boundary-links="true"></dir-pagination-controls>
+</div>

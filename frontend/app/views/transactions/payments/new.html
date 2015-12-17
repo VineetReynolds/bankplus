@@ -1,0 +1,32 @@
+<form name="newPaymentForm" class="form-horizontal" novalidate ng-submit="newPaymentForm.$valid && makePayment()">
+  <fieldset>
+
+    <legend>Make a Payment</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="contact">Pay to :</label>
+      <div class="col-md-4">
+        <select id="contact" name="contact" class="form-control input-md" ng-model="payment.contact" ng-options="contact.id as contact.fullName for contact in contactsInStore" required>
+          <option value="">[No contact]</option>
+        </select>
+        <span class="help-block">Contact to pay</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="payment.amount" required="">
+        <span class="help-block">Amount to pay</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makePayment"></label>
+      <div class="col-md-8">
+        <input id="makePayment" name="makePayment" class="btn btn-success" type="submit" value="Make payment" ng-disabled="newPaymentForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" value="Reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>

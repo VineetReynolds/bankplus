@@ -1,0 +1,38 @@
+<div>
+  <h3>Contacts</h3>
+  <form id="ContactSearch" class="form-horizontal">
+
+    <div class="form-group">
+      <label for="name" class="col-sm-2 control-label">Name</label>
+      <div class="col-sm-10">
+        <input id="name" name="name" class="form-control" type="text" ng-model="search.name" placeholder="Enter the Contact Name or IBAN" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="col-md-offset-2 col-sm-10">
+        <a id="Search" name="Search" class="btn btn-primary" ng-click="performSearch()"><span class="glyphicon glyphicon-search"></span> Search</a>
+      </div>
+    </div>
+  </form>
+</div>
+<div id="search-results">
+  <div class="table-responsive">
+    <table class="table table-responsive table-bordered table-striped clearfix">
+      <thead>
+      <tr>
+        <th>Name</th>
+        <th>IBAN</th>
+        <th></th>
+      </tr>
+      </thead>
+      <tbody id="search-results-body">
+      <tr ng-repeat="result in searchResults | filter:search.name">
+        <td>{{result.fullName}}</td>
+        <td>{{result.iban}}</td>
+        <td><a href="#/contacts/edit/{{result.id}}" class="glyphicon glyphicon-edit">Edit</a></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

@@ -1,0 +1,33 @@
+<form name="newContactForm" class="form-horizontal" novalidate ng-submit="newContactForm.$valid && registerContact()">
+    <fieldset>
+
+        <legend>Register a contact</legend>
+
+        <!-- Full name-->
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="contactname">Name</label>
+            <div class="col-md-4">
+                <input id="contactname" name="contactname" type="text" placeholder="e.g. John Doe" class="form-control input-md" ng-model="contact.name" required="">
+                <span class="help-block">Full name of your contact</span>
+            </div>
+        </div>
+
+        <!-- IBAN-->
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="iban">IBAN</label>
+            <div class="col-md-4">
+                <input id="iban" name="iban" type="text" placeholder="e.g. BANKPLUS000111" class="form-control input-md" ng-model="contact.iban" required="">
+                <span class="help-block">The IBAN of your contact</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="col-md-4 control-label" for="registercontact"></label>
+            <div class="col-md-8">
+                <input id="registercontact" name="registercontact" class="btn btn-success" type="submit" value="Register Contact" ng-disabled="newContactForm.$invalid" />
+                <input id="reset" name="reset" class="btn btn-default" type="reset" />
+            </div>
+        </div>
+
+    </fieldset>
+</form>

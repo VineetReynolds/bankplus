@@ -1,0 +1,8 @@
+{
+  "realm": "BankPlus",
+  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApvDnVY+76T/1uEYMabMrrplHxIXa8pbgWkjFBKU+FoQwE5uVxR8mWu/eWke6W9O+ndDnMRrPDV7vGiYkPd1hKZMBVOrH83ZrFvw1GbOBiWVdpSjOw7ZnRq+9qX1qBV+2+ii1OnXB85cxtvItf3MCklycjrhaecrLiTUh/+T2B17E/a6u5S4KkKSqBjIPY9H6L5NTC1llDvCCy+qq8v0qAgJMXbdL7Z2lEatjxtdhdpm4uPAscR3QOlHuqocuFGL2mHjP5PhBnEdouGtCTZPM5TK3+8NlXqzM83a+V7wxCYtHHrRZJZDkloY3BXS2XWkBk1Qt951UYcHOZ19tyR8fwwIDAQAB",
+  "auth-server-url": "http://localhost:8080/auth",
+  "ssl-required": "external",
+  "resource": "BankPlus",
+  "public-client": true
+}

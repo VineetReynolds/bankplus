@@ -1,0 +1,22 @@
+<form name="newDepositForm" class="form-horizontal" novalidate ng-submit="newDepositForm.$valid && makeDeposit()">
+  <fieldset>
+
+    <legend>Make a Deposit</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="deposit.amount" required="">
+        <span class="help-block">Amount to deposit</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makeDeposit"></label>
+      <div class="col-md-8">
+        <input id="makeDeposit" name="makeDeposit" class="btn btn-success" type="submit" value="Deposit" ng-disabled="newDepositForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" value="Reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>

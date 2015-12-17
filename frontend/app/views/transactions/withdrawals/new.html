@@ -1,0 +1,22 @@
+<form name="newWithdrawalForm" class="form-horizontal" novalidate ng-submit="newWithdrawalForm.$valid && makeWithdrawal()">
+  <fieldset>
+
+    <legend>Make a Withdrawal</legend>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="amount">Amount</label>
+      <div class="col-md-4">
+        <input id="amount" name="amount" type="number" min="0" placeholder="e.g. 100.45" class="form-control input-md" ng-model="withdrawal.amount" required="">
+        <span class="help-block">Amount to withdraw</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="makeWithdrawal"></label>
+      <div class="col-md-8">
+        <input id="makeWithdrawal" name="makeWithdrawal" class="btn btn-success" type="submit" value="Withdraw" ng-disabled="newWithdrawalForm.$invalid" />
+        <input id="reset" name="reset" class="btn btn-default" type="reset" />
+      </div>
+    </div>
+  </fieldset>
+</form>

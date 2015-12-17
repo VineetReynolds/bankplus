@@ -1,0 +1,33 @@
+<form class="form-horizontal">
+  <fieldset>
+
+    <legend>Edit a contact</legend>
+
+    <!-- Full name-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="contactname">Name</label>
+      <div class="col-md-4">
+        <input id="contactname" name="contactname" type="text" placeholder="e.g. John Doe" class="form-control input-md" ng-model="contact.fullName" required="">
+        <span class="help-block">Full name of your contact</span>
+      </div>
+    </div>
+
+    <!-- IBAN-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="iban">IBAN</label>
+      <div class="col-md-4">
+        <input id="iban" name="iban" type="text" placeholder="e.g. BANKPLUS000111" class="form-control input-md" ng-model="contact.iban" required="">
+        <span class="help-block">The IBAN of your contact</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="registercontact"></label>
+      <div class="col-md-8">
+        <button id="registercontact" name="registercontact" class="btn btn-success" ng-click="modifyContact()">Save Contact</button>
+        <button id="reset" name="reset" class="btn btn-default" ng-click="reset()">Reset</button>
+      </div>
+    </div>
+
+  </fieldset>
+</form>
