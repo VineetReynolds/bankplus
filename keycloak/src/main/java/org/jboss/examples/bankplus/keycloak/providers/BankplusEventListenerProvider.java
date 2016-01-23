@@ -51,9 +51,9 @@ public class BankplusEventListenerProvider implements EventListenerProvider {
 
                     try {
                         // Query for the user in the BankPlus REST API
-                        String envHost = System.getenv("CUSTOMERS_PORT_8080_TCP_ADDR");
+                        String envHost = System.getenv("BANKPLUS_CUSTOMERS_SERVICE_HOST");
                         String host = envHost == null ? "bankplus_customers.dev.docker" : envHost;
-                        String envPort = System.getenv("CUSTOMERS_PORT_8080_TCP_PORT");
+                        String envPort = System.getenv("BANKPLUS_CUSTOMERS_SERVICE_PORT");
                         int port = envPort == null ? 8080 : Integer.parseInt(envPort);
                         URI uri = new URIBuilder()
                                 .setScheme("http")

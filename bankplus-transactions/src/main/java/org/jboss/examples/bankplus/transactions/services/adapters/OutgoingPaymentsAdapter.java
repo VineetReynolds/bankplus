@@ -16,9 +16,9 @@ public class OutgoingPaymentsAdapter {
     private static final int port;
 
     static {
-        String envHost = System.getenv("MESSAGING_PORT_8080_TCP_ADDR");
+        String envHost = System.getenv("BANKPLUS_MESSAGING_SERVICE_HOST");
         host = envHost == null ? "bankplus_messaging.dev.docker" : envHost;
-        String envPort = System.getenv("MESSAGING_PORT_8080_TCP_PORT");
+        String envPort = System.getenv("BANKPLUS_MESSAGING_SERVICE_PORT");
         port = envPort == null ? 8080 : Integer.parseInt(envPort);
     }
 

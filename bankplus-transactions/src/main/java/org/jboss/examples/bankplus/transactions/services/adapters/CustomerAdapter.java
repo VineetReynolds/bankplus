@@ -20,9 +20,9 @@ public class CustomerAdapter {
     private static final int port;
 
     static {
-        String envHost = System.getenv("CUSTOMERS_PORT_8080_TCP_ADDR");
+        String envHost = System.getenv("BANKPLUS_CUSTOMERS_SERVICE_HOST");
         host = envHost == null ? "bankplus_customers.dev.docker" : envHost;
-        String envPort = System.getenv("CUSTOMERS_PORT_8080_TCP_PORT");
+        String envPort = System.getenv("BANKPLUS_CUSTOMERS_SERVICE_PORT");
         port = envPort == null ? 8080 : Integer.parseInt(envPort);
     }
 
