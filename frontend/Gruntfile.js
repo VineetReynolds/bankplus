@@ -399,9 +399,9 @@ module.exports = function (grunt) {
         'copy:styles'
       ],
       dist: [
-        'copy:styles',
+        'copy:styles'/* Disable for now due to build failures on Centos7,
         'imagemin',
-        'svgmin'
+        'svgmin'*/
       ]
     },
 
@@ -454,7 +454,8 @@ module.exports = function (grunt) {
     'concat',
     'ngAnnotate',
     'copy:dist',
-    'cdnify',
+    /* Temporarily disable due to build failures on Centos7
+    'cdnify',*/
     'cssmin',
     'uglify',
     'filerev',
