@@ -367,7 +367,7 @@ module.exports = function (grunt) {
             'keycloak.json',
             '*.html',
             'views/**/*.html',
-            'images/{,*/}*.{webp}',
+            'images/{,*/}*.*',
             'styles/fonts/{,*/}*.*'
           ]
         }, {
