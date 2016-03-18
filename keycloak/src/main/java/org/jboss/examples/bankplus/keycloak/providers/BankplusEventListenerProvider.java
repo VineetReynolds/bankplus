@@ -6,13 +6,14 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
+import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.connections.httpclient.HttpClientBuilder;
 import org.keycloak.events.Event;
 import org.keycloak.events.EventListenerProvider;
 import org.keycloak.events.EventType;
 import org.keycloak.events.admin.AdminEvent;
 import org.keycloak.models.*;
-import org.keycloak.util.KeycloakUriBuilder;
+
 
 import javax.json.Json;
 import javax.json.JsonArray;
