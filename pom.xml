@@ -18,7 +18,7 @@
 		<maven.compiler.source>1.8</maven.compiler.source>
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<version.wildfly-swarm>1.0.0.Alpha6-SNAPSHOT</version.wildfly-swarm>
+		<version.wildfly-swarm>1.0.0.Alpha8</version.wildfly-swarm>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
