@@ -18,7 +18,7 @@
 		<maven.compiler.source>1.8</maven.compiler.source>
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<version.wildfly-swarm>1.0.0.Alpha8</version.wildfly-swarm>
+		<version.wildfly-swarm>1.0.0.Beta6</version.wildfly-swarm>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
@@ -36,6 +36,14 @@
 				<artifactId>jsr250-api</artifactId>
 				<version>1.0</version>
 				<scope>provided</scope>
+			</dependency>
+			<!-- WildFly Swarm BOM -->
+			<dependency>
+				<groupId>org.wildfly.swarm</groupId>
+				<artifactId>bom</artifactId>
+				<version>${version.wildfly-swarm}</version>
+				<type>pom</type>
+				<scope>import</scope>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
