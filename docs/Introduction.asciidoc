@@ -2,8 +2,8 @@ BankPlus is a moderately complex example application that demonstrates the desig
 
 The accompanying tutorial is targetted towards an audience having basic working knowledge about :
 
-* Java EE 7
 * AngularJS
+* Java EE 7
 
 Some knowledge of JBoss Enterprise Application Platform is useful, but you may still find the tutorial useful if you are approaching the development of this application from the perspective of another Java EE application server.
 
@@ -17,25 +17,4 @@ In Chapter 4, an introduction to microservices would be presented in the context
 
 In Chapter 5, we decompose the existing monolithic application into several microservices. We'll utilize the concept of an Anti-Corruption Layer to individually extract every microservice without compromising on the correctness and functionality of the application during the decomposition phase.
 
-We'll then move onto deploying and operating the microservices style application on a platform suitable for such services, namely OpenShift, through the use of underlying technologies - Docker and Kubernetes.
-
-Microservices is a fairly recent architectural style that revolves around designing applications in the form of independent deployable units focussing on specific bounded contexts. They are a response to the monolithic style of developing and deploying applications.
-
-In a sense, they can be termed as "hipster SOA", as the focus is on developing applications using a service-oriented architecture. Unlike contemporary SOA applications, a lot more intelligence resides in the nodes where the microservices run, instead of in the interconnecting infrastructure.
-
-The monolithic style of deploying applications treats an application as a single deployable unit. The deployable unit is often a single WAR, with the necessary libraries provided by the application server.
-
-This is an example application that uses a micro-services architecture to implement payment (or fund transfers, depending on how you look at it)  services offered by a bank. Inspired by Simple among others.
-For now, the scope of the services is limited, to keep the overhead of understanding the application and architecture.
-Hence, we limit ourselves to building services to handle
-customer account registration, 
-provide a general ledger and journal for accounting
-and transfer of money between accounts (read as payments, or fund transfers).
-
-However, since we must not forget that a microservices architecture is adopted for the sake of agility, we may have to add additional services (like a lending service, or a limits service) in the future that operate with the existing services. The bank therefore, operates as a “payment bank”. Such banks are licensed to only serve the purpose of payments and remittances; they are not allowed to engage in lending and thus offer no loans. A broader license is required for engaging in lending activities.
-
-An attempt will be made to solve payments across accounts in different banks using the concept of Nostro/Vostro accounts, but we won't integrate with SWIFT, TARGET, ACH or any other payment or electronic money transfer system in the real-world. We will manage only one Nostro/Vostro combination - this would be an account managed by a hypothetical clearing house or clearing exchange. BankPlus would maintain two accounts - it’s nostro account representing it’s  real account at a clearing house/exchange (like ACH), and a vostro account representing the account for the exchange at BankPlus. Transfers are routed to other banks through the clearing house/exchange. We will not implement a clearing exchange, and thus only maintain a single account in BankPlus (the vostro) that tracks the position/balance of the bank at the exchange. However, we may show how (in an appendix or a separate document/guide) the possibility of integration with a real-world exchange through extending the application with another service.
-
-Additionally, other services for mobile (aka smartphone) users may be built, like uploading of cheques via smartphones directly to the account (inspired by the photo-deposit feature of Simple). This would of course be dependent on time constraints, and whether there is any value added to end-users (software developers, and not hypothetical users of a banking service). 
-
-Most of the use cases are based on existing services provided by banks and payment services. But we will not attempt to mimic banks in their entirety. Software architectures in banks may not provide certain features due to various non-technical reasons. For instance, customer account data is not available in a portable manner to the customers of banks. Therefore, we currently have services like Mint and Yodlee that do not attempt to get raw data from the bank accounts, but instead screen scrape for information. These services use your bank account credentials to login and extract this data from the bank sites. This situation is expected to remain unchanged until there is a mass shift in perception. BankPlus, however, will demonstrate data portability through APIs; and thus we will use OAuth to secure services. This is also being done, so that the application and it's architecture will be useful to software developers catering other industries, and not just banking.
+In Chapter 6, we'll then move onto deploying and operating the microservices style application on a platform suitable for such services, namely OpenShift, through the use of underlying technologies - Docker and Kubernetes. We'll also extend the functionality of a select few microservices to demonstrate how the microservices architecture brings greater agility to the bank, by allowing business requests to be developed and implemented by one or more technical implementation teams and for such changes to deployed to production without waiting for deliverables from other teams.
