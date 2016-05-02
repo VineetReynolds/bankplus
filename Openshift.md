@@ -4,8 +4,7 @@
     oc create -f https://raw.githubusercontent.com/VineetReynolds/sti-keycloak/master/9.0/test/build-config.json
     oc start-build keycloak-9-centos7-build
 
-    oc create -f https://raw.githubusercontent.com/VineetReynolds/sti-wildflyswarm/master/1.0.0.Alpha6/test/imagestream.json
-    oc create -f https://raw.githubusercontent.com/VineetReynolds/sti-wildflyswarm/master/1.0.0.Alpha6/test/build-config.json
+    oc create -f https://raw.githubusercontent.com/wildfly-swarm/sti-wildflyswarm/master/1.0/wildflyswarm-sti-all.json
     oc start-build wildflyswarm-10-centos7-build
 
     oc create -f https://raw.githubusercontent.com/VineetReynolds/sti-grunt-nginx/master/1.0/test/imagestream.json
