@@ -538,7 +538,7 @@
     "clientAuthenticatorType" : "client-secret",
     "secret" : "53acbb4b-6284-42e5-9104-2cbf6fca005c",
     "redirectUris" : [ "http://bankplus-frontend-bankplus.rhel-cdk.10.1.2.2.xip.io/*" ],
-    "webOrigins" : [ "http://bankplus-frontend-bankplus.rhel-cdk.10.1.2.2.xip.io/" ],
+    "webOrigins" : [ "http://bankplus-frontend-bankplus.rhel-cdk.10.1.2.2.xip.io" ],
     "notBefore" : 0,
     "bearerOnly" : false,
     "consentRequired" : false,
